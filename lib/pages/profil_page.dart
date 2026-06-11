@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../main.dart';
+import 'onboarding_page.dart';
 
 class ProfilPage extends StatelessWidget {
   const ProfilPage({super.key});
@@ -9,32 +12,82 @@ class ProfilPage extends StatelessWidget {
   static const Color textPrimary = Color(0xFF1E293B);
   static const Color textSecondary = Color(0xFF64748B);
 
+  Stream<Map<String, dynamic>> _profileStream() {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return const Stream.empty();
+    return Supabase.instance.client
+        .from('profiles')
+        .stream(primaryKey: ['id'])
+        .eq('id', user.id)
+        .map((list) => list.isNotEmpty ? list.first : {});
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Container(
-        color: backgroundColor,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Profil
-              _buildProfileHeader(),
-              const SizedBox(height: 24),
-
-              // Stats Grid
-              _buildStatsGrid(),
-              const SizedBox(height: 24),
-
-              // Menu Pengaturan
-              _buildSectionTitle('Pengaturan Akun'),
-              const SizedBox(height: 12),
-              _buildSettingsMenu(),
-              const SizedBox(height: 16),
-            ],
+    if (!isSupabaseInitialized || Supabase.instance.client.auth.currentUser == null) {
+      return const Scaffold(
+        backgroundColor: backgroundColor,
+        body: Center(
+          child: Text(
+            'Sesi tidak valid. Silakan login kembali.',
+            style: TextStyle(color: textSecondary),
           ),
         ),
+      );
+    }
+
+    final currentUser = Supabase.instance.client.auth.currentUser!;
+
+    return SafeArea(
+      child: StreamBuilder<Map<String, dynamic>>(
+        stream: _profileStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: primaryColor));
+          } else if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Text(
+                  'Gagal memuat profil: ${snapshot.error}',
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+            );
+          }
+
+          final data = snapshot.data ?? {};
+          final fullName = data['full_name'] as String? ?? 'Pengguna';
+          final email = currentUser.email ?? 'email@domain.com';
+          final level = data['level'] as int? ?? 1;
+          final totalXp = data['total_xp'] as int? ?? 0;
+          final modulSelesai = data['modul_selesai'] as int? ?? 0;
+
+          return Container(
+            color: backgroundColor,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header Profil
+                  _buildProfileHeader(fullName, email),
+                  const SizedBox(height: 24),
+
+                  // Stats Grid
+                  _buildStatsGrid(level, totalXp, modulSelesai),
+                  const SizedBox(height: 24),
+
+                  // Menu Pengaturan
+                  _buildSectionTitle('Pengaturan Akun'),
+                  const SizedBox(height: 12),
+                  _buildSettingsMenu(context),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -42,7 +95,9 @@ class ProfilPage extends StatelessWidget {
   // ─────────────────────────────────────────────
   //  HEADER PROFIL
   // ─────────────────────────────────────────────
-  Widget _buildProfileHeader() {
+  Widget _buildProfileHeader(String fullName, String email) {
+    final initial = fullName.trim().isNotEmpty ? fullName.trim()[0].toUpperCase() : 'U';
+
     return Center(
       child: Column(
         children: [
@@ -61,12 +116,12 @@ class ProfilPage extends StatelessWidget {
                 ),
               ],
             ),
-            child: const CircleAvatar(
+            child: CircleAvatar(
               radius: 45,
-              backgroundColor: Color(0xFFEDE9FE),
+              backgroundColor: const Color(0xFFEDE9FE),
               child: Text(
-                'S',
-                style: TextStyle(
+                initial,
+                style: const TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
                   color: primaryColor,
@@ -77,9 +132,9 @@ class ProfilPage extends StatelessWidget {
           const SizedBox(height: 14),
 
           // Nama
-          const Text(
-            'Sara',
-            style: TextStyle(
+          Text(
+            fullName,
+            style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: textPrimary,
@@ -88,9 +143,9 @@ class ProfilPage extends StatelessWidget {
           const SizedBox(height: 4),
 
           // Email
-          const Text(
-            'sara@email.com',
-            style: TextStyle(
+          Text(
+            email,
+            style: const TextStyle(
               fontSize: 14,
               color: textSecondary,
             ),
@@ -117,7 +172,7 @@ class ProfilPage extends StatelessWidget {
   // ─────────────────────────────────────────────
   //  STATS GRID (3 kolom)
   // ─────────────────────────────────────────────
-  Widget _buildStatsGrid() {
+  Widget _buildStatsGrid(int level, int totalXp, int modulSelesai) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
       decoration: BoxDecoration(
@@ -137,7 +192,7 @@ class ProfilPage extends StatelessWidget {
             // Kolom 1: Level
             Expanded(
               child: _buildStatItem(
-                value: '4',
+                value: level.toString(),
                 label: 'Level',
                 icon: Icons.star_rounded,
                 iconColor: const Color(0xFFF59E0B),
@@ -154,7 +209,7 @@ class ProfilPage extends StatelessWidget {
             // Kolom 2: Total XP
             Expanded(
               child: _buildStatItem(
-                value: '320',
+                value: '$totalXp',
                 label: 'Total XP',
                 icon: Icons.bolt_rounded,
                 iconColor: primaryColor,
@@ -171,7 +226,7 @@ class ProfilPage extends StatelessWidget {
             // Kolom 3: Modul Selesai
             Expanded(
               child: _buildStatItem(
-                value: '5',
+                value: modulSelesai.toString(),
                 label: 'Modul Selesai',
                 icon: Icons.menu_book_rounded,
                 iconColor: const Color(0xFF10B981),
@@ -232,7 +287,7 @@ class ProfilPage extends StatelessWidget {
   // ─────────────────────────────────────────────
   //  SETTINGS MENU
   // ─────────────────────────────────────────────
-  Widget _buildSettingsMenu() {
+  Widget _buildSettingsMenu(BuildContext context) {
     final List<_MenuItemData> menuItems = [
       _MenuItemData(
         icon: Icons.bookmark_border_rounded,
@@ -257,6 +312,27 @@ class ProfilPage extends StatelessWidget {
         iconColor: Colors.red,
         title: 'Keluar Akun',
         isDestructive: true,
+        onTap: () async {
+          // Menampilkan loading indikator
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const Center(child: CircularProgressIndicator()),
+          );
+
+          // Proses logout dari Supabase
+          await Supabase.instance.client.auth.signOut();
+
+          if (context.mounted) {
+            // Tutup loading dan tendang user kembali ke OnboardingPage
+            Navigator.of(context).pop();
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const OnboardingPage()),
+              (route) => false,
+            );
+          }
+        },
       ),
     ];
 
@@ -279,42 +355,45 @@ class ProfilPage extends StatelessWidget {
             final item = menuItems[index];
             return Column(
               children: [
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  leading: Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
+                Material(
+                  color: Colors.transparent,
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    leading: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: item.isDestructive
+                            ? const Color(0xFFFEE2E2)
+                            : const Color(0xFFEDE9FE),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        item.icon,
+                        color: item.iconColor,
+                        size: 22,
+                      ),
+                    ),
+                    title: Text(
+                      item.title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: item.isDestructive ? Colors.red : textPrimary,
+                      ),
+                    ),
+                    trailing: Icon(
+                      Icons.chevron_right,
                       color: item.isDestructive
-                          ? const Color(0xFFFEE2E2)
-                          : const Color(0xFFEDE9FE),
-                      borderRadius: BorderRadius.circular(12),
+                          ? Colors.red.withValues(alpha: 0.5)
+                          : const Color(0xFFCBD5E1),
+                      size: 24,
                     ),
-                    child: Icon(
-                      item.icon,
-                      color: item.iconColor,
-                      size: 22,
-                    ),
+                    onTap: item.onTap ?? () {},
                   ),
-                  title: Text(
-                    item.title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: item.isDestructive ? Colors.red : textPrimary,
-                    ),
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right,
-                    color: item.isDestructive
-                        ? Colors.red.withValues(alpha: 0.5)
-                        : const Color(0xFFCBD5E1),
-                    size: 24,
-                  ),
-                  onTap: () {},
                 ),
                 // Divider kecuali item terakhir
                 if (index < menuItems.length - 1)
@@ -341,11 +420,13 @@ class _MenuItemData {
   final Color iconColor;
   final String title;
   final bool isDestructive;
+  final VoidCallback? onTap;
 
   _MenuItemData({
     required this.icon,
     required this.iconColor,
     required this.title,
     required this.isDestructive,
+    this.onTap,
   });
 }

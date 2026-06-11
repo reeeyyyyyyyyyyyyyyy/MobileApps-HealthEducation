@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class BerandaPage extends StatelessWidget {
   const BerandaPage({super.key});
@@ -9,6 +10,16 @@ class BerandaPage extends StatelessWidget {
   static const Color backgroundColor = Color(0xFFF8FAFC);
   static const Color textPrimary = Color(0xFF1E293B);
   static const Color textSecondary = Color(0xFF64748B);
+
+  Stream<Map<String, dynamic>> _profileStream() {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return const Stream.empty();
+    return Supabase.instance.client
+        .from('profiles')
+        .stream(primaryKey: ['id'])
+        .eq('id', user.id)
+        .map((list) => list.isNotEmpty ? list.first : {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,84 +59,93 @@ class BerandaPage extends StatelessWidget {
   //  HEADER: Avatar + Sapaan + Notifikasi
   // ─────────────────────────────────────────────
   Widget _buildHeader() {
-    return Row(
-      children: [
-        // Avatar
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: secondaryColor, width: 2.5),
-            boxShadow: [
-              BoxShadow(
-                color: primaryColor.withValues(alpha: 0.15),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: _profileStream(),
+      builder: (context, snapshot) {
+        final data = snapshot.data ?? {};
+        final fullName = data['full_name'] as String? ?? 'Pengguna';
+        final initial = fullName.trim().isNotEmpty ? fullName.trim()[0].toUpperCase() : 'U';
+
+        return Row(
+          children: [
+            // Avatar
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: secondaryColor, width: 2.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withValues(alpha: 0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: const CircleAvatar(
-            radius: 24,
-            backgroundColor: Color(0xFFEDE9FE),
-            child: Text(
-              'S',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: primaryColor,
+              child: CircleAvatar(
+                radius: 24,
+                backgroundColor: const Color(0xFFEDE9FE),
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: primaryColor,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(width: 12),
+            const SizedBox(width: 12),
 
-        // Sapaan dua baris
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                'Hai, Sara! 👋',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+            // Sapaan dua baris
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Halo, Selamat Datang, $fullName!',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Semangat belajar hari ini!',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Ikon notifikasi
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                onPressed: () {},
+                icon: const Icon(
+                  Icons.notifications_none_outlined,
                   color: textPrimary,
+                  size: 26,
                 ),
               ),
-              SizedBox(height: 2),
-              Text(
-                'Semangat belajar hari ini!',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Ikon notifikasi
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: IconButton(
-            onPressed: () {},
-            icon: const Icon(
-              Icons.notifications_none_outlined,
-              color: textPrimary,
-              size: 26,
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -215,10 +235,7 @@ class BerandaPage extends StatelessWidget {
                   children: [
                     Icon(Icons.auto_stories_rounded, size: 48, color: Colors.white),
                     SizedBox(height: 6),
-                    Text(
-                      '📖✨',
-                      style: TextStyle(fontSize: 20),
-                    ),
+                    Icon(Icons.menu_book_outlined, size: 24, color: Colors.white70),
                   ],
                 ),
               ),

@@ -22,7 +22,7 @@ class _KomunitasPageState extends State<KomunitasPage> {
       username: 'Anonim',
       timeAgo: '2 jam yang lalu',
       content:
-          'Apakah normal kalau siklus menstruasi maju jadi 21 hari? Kakak-kakak ada yang pernah ngalamin? 🤔',
+          'Apakah normal kalau siklus menstruasi maju jadi 21 hari? Kakak-kakak ada yang pernah ngalamin?',
       likes: 12,
       comments: 5,
       isLiked: false,
@@ -33,7 +33,7 @@ class _KomunitasPageState extends State<KomunitasPage> {
       username: 'Anonim',
       timeAgo: '5 jam yang lalu',
       content:
-          'Aku mau cerita, aku baru pertama kali menstruasi dan bingung harus pakai apa. Ada yang bisa bantu kasih saran? 🙏',
+          'Aku mau cerita, aku baru pertama kali menstruasi dan bingung harus pakai apa. Ada yang bisa bantu kasih saran?',
       likes: 24,
       comments: 11,
       isLiked: true,
@@ -44,7 +44,7 @@ class _KomunitasPageState extends State<KomunitasPage> {
       username: 'Anonim',
       timeAgo: '1 hari yang lalu',
       content:
-          'Tips dari aku: kalau lagi kram perut saat haid, coba kompres hangat di bagian perut bawah. Biasanya lumayan membantu! ❤️',
+          'Tips dari aku: kalau lagi kram perut saat haid, coba kompres hangat di bagian perut bawah. Biasanya lumayan membantu!',
       likes: 38,
       comments: 7,
       isLiked: false,
@@ -55,7 +55,7 @@ class _KomunitasPageState extends State<KomunitasPage> {
       username: 'Anonim',
       timeAgo: '2 hari yang lalu',
       content:
-          'Kenapa ya setiap mau haid mood aku jadi berantakan? Teman-teman juga merasakan hal yang sama? 😢',
+          'Kenapa ya setiap mau haid mood aku jadi berantakan? Teman-teman juga merasakan hal yang sama?',
       likes: 19,
       comments: 14,
       isLiked: false,
@@ -166,7 +166,7 @@ class _KomunitasPageState extends State<KomunitasPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Kamu Tidak Sendiri! 💜',
+                  'Kamu Tidak Sendiri!',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
@@ -220,7 +220,7 @@ class _KomunitasPageState extends State<KomunitasPage> {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Center(
-                child: Text('🤝', style: TextStyle(fontSize: 36)),
+                child: Icon(Icons.handshake_rounded, size: 36, color: Color(0xFF8B5CF6)),
               ),
             ),
           ),

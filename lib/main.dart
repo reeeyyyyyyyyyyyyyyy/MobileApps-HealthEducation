@@ -1,11 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'pages/beranda_page.dart';
 import 'pages/belajar_page.dart';
 import 'pages/kuis_page.dart';
 import 'pages/komunitas_page.dart';
 import 'pages/profil_page.dart';
+import 'pages/splash_page.dart';
 
-void main() {
+// Helper to check if Supabase is successfully initialized
+bool get isSupabaseInitialized {
+  try {
+    Supabase.instance;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  try {
+    // Attempt initialization with config credentials
+    await Supabase.initialize(
+      url: 'https://yxlupfucivdogmqvhzho.supabase.co',
+      anonKey: 'sb_publishable_rJjtSnKe_ZhiDm8jtjHzmQ_EFRMHkP9',
+    );
+  } catch (e) {
+    debugPrint('Supabase initialization failed: $e');
+  }
+
   runApp(const HealthEduApp());
 }
 
@@ -15,7 +39,7 @@ class HealthEduApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Health Edu App',
+      title: 'BloomFem',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -23,7 +47,7 @@ class HealthEduApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const MainScreen(),
+      home: const SplashPage(),
     );
   }
 }
