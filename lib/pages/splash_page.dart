@@ -82,8 +82,8 @@ class _SplashPageState extends State<SplashPage>
           return ClipOval(
             child: Image.asset(
               'assets/logo.png',
-              width: 100,
-              height: 100,
+              width: 300,
+              height: 300,
               fit: BoxFit.cover,
             ),
           );
