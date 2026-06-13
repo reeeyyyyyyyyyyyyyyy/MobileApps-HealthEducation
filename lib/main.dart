@@ -56,30 +56,47 @@ class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  State<MainScreen> createState() => MainScreenState();
+
+  static MainScreenState? of(BuildContext context) {
+    return context.findAncestorStateOfType<MainScreenState>();
+  }
 }
 
-class _MainScreenState extends State<MainScreen> {
+class MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+  int _belajarCategoryIndex = 0;
 
-  static const List<Widget> _pages = <Widget>[
-    BerandaPage(),
-    BelajarPage(),
-    KuisPage(),
-    KomunitasPage(),
-    ProfilPage(),
-  ];
+  void navigateToPage(int index, {int categoryIndex = 0}) {
+    setState(() {
+      _selectedIndex = index;
+      if (index == 1) {
+        _belajarCategoryIndex = categoryIndex;
+      }
+    });
+  }
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
+      if (index == 1) {
+        _belajarCategoryIndex = 0; // Reset ke "Semua" jika ditekan manual dari tab bar
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> pages = <Widget>[
+      const BerandaPage(),
+      BelajarPage(initialCategoryIndex: _belajarCategoryIndex),
+      const KuisPage(),
+      const KomunitasPage(),
+      const ProfilPage(),
+    ];
+
     return Scaffold(
-      body: _pages.elementAt(_selectedIndex),
+      body: pages.elementAt(_selectedIndex),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Beranda'),
@@ -92,8 +109,7 @@ class _MainScreenState extends State<MainScreen> {
         selectedItemColor: const Color(0xFF8B5CF6),
         unselectedItemColor: Colors.grey,
         onTap: _onItemTapped,
-        type: BottomNavigationBarType
-            .fixed, // Agar semua menu tampil meski lebih dari 3
+        type: BottomNavigationBarType.fixed, // Agar semua menu tampil meski lebih dari 3
       ),
     );
   }

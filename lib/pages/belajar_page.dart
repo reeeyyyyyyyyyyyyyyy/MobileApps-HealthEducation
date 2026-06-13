@@ -4,7 +4,8 @@ import '../main.dart';
 import 'detail_modul_page.dart';
 
 class BelajarPage extends StatefulWidget {
-  const BelajarPage({super.key});
+  final int initialCategoryIndex;
+  const BelajarPage({super.key, this.initialCategoryIndex = 0});
 
   @override
   State<BelajarPage> createState() => _BelajarPageState();
@@ -17,7 +18,7 @@ class _BelajarPageState extends State<BelajarPage> {
   static const Color textPrimary = Color(0xFF1E293B);
   static const Color textSecondary = Color(0xFF64748B);
 
-  int _selectedChipIndex = 0;
+  late int _selectedChipIndex;
 
   final List<String> _filterLabels = [
     'Semua',
@@ -31,7 +32,17 @@ class _BelajarPageState extends State<BelajarPage> {
   @override
   void initState() {
     super.initState();
+    _selectedChipIndex = widget.initialCategoryIndex;
     _loadModules();
+  }
+
+  @override
+  void didUpdateWidget(covariant BelajarPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialCategoryIndex != oldWidget.initialCategoryIndex) {
+      _selectedChipIndex = widget.initialCategoryIndex;
+      _loadModules();
+    }
   }
 
   void _loadModules() {
