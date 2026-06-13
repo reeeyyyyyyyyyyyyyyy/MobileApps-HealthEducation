@@ -24,7 +24,7 @@ void main() async {
     // Attempt initialization with config credentials
     await Supabase.initialize(
       url: 'https://yxlupfucivdogmqvhzho.supabase.co',
-      anonKey: 'sb_publishable_rJjtSnKe_ZhiDm8jtjHzmQ_EFRMHkP9',
+      publishableKey: 'sb_publishable_rJjtSnKe_ZhiDm8jtjHzmQ_EFRMHkP9',
     );
   } catch (e) {
     debugPrint('Supabase initialization failed: $e');

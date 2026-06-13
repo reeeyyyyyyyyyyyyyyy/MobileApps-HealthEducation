@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../main.dart';
+import '../utils/toast_helper.dart';
 import 'login_page.dart';
 import 'otp_verification_page.dart';
 
@@ -52,13 +53,7 @@ class _RegisterPageState extends State<RegisterPage> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Kode OTP telah dikirim ke email kamu!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
+        ToastHelper.showSuccess(context, 'Kode OTP telah dikirim ke email kamu!');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -73,13 +68,7 @@ class _RegisterPageState extends State<RegisterPage> {
         if (e is AuthException) {
           errorMsg = e.message;
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Pendaftaran gagal: $errorMsg'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
+        ToastHelper.showError(context, 'Pendaftaran gagal: $errorMsg');
       }
     } finally {
       if (mounted) {
@@ -102,8 +91,6 @@ class _RegisterPageState extends State<RegisterPage> {
         throw Exception("Supabase belum diinisialisasi.");
       }
 
-
-
       final GoogleSignIn googleSignIn = GoogleSignIn(
         clientId: Platform.isIOS
             ? '53267466425-6dpv3sj1eba1vm7sl0dbrm2siinb775g.apps.googleusercontent.com'
@@ -119,31 +106,24 @@ class _RegisterPageState extends State<RegisterPage> {
         return;
       }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final accessToken = googleAuth.accessToken;
-      final idToken = googleAuth.idToken;
-
-      if (idToken == null) {
-        throw Exception('ID Token tidak ditemukan.');
-      }
-
-      await Supabase.instance.client.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken,
-        accessToken: accessToken,
+      // Kirim OTP ke email Google pengguna
+      await Supabase.instance.client.auth.signInWithOtp(
+        email: googleUser.email,
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Berhasil masuk dengan Google!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pushAndRemoveUntil(
+        ToastHelper.showSuccess(
           context,
-          MaterialPageRoute(builder: (context) => const MainScreen()),
-          (route) => false,
+          'Kode OTP pendaftaran Google telah dikirim ke email kamu!',
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OtpVerificationPage(
+              email: googleUser.email,
+              isGoogleSignUp: true,
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -153,13 +133,7 @@ class _RegisterPageState extends State<RegisterPage> {
         if (e is AuthException) {
           errorMsg = e.message;
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal masuk dengan Google: $errorMsg'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
+        ToastHelper.showError(context, 'Gagal memproses pendaftaran Google: $errorMsg');
       }
     } finally {
       if (mounted) {
@@ -239,7 +213,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.grey.withOpacity(0.15)),
+                      borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -282,7 +256,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.grey.withOpacity(0.15)),
+                      borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -339,7 +313,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.grey.withOpacity(0.15)),
+                      borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -369,7 +343,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                     elevation: 2,
-                    shadowColor: const Color(0xFF8B5CF6).withOpacity(0.4),
+                    shadowColor: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
                   ),
                   child: _isLoading
                       ? const SizedBox(
@@ -394,7 +368,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 // Divider "atau daftar dengan"
                 Row(
                   children: [
-                    Expanded(child: Divider(color: Colors.grey.withOpacity(0.3))),
+                    Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.3))),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       child: Text(
@@ -402,7 +376,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         style: TextStyle(fontSize: 12, color: const Color(0xFF64748B)),
                       ),
                     ),
-                    Expanded(child: Divider(color: Colors.grey.withOpacity(0.3))),
+                    Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.3))),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -412,7 +386,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   onPressed: _isLoading ? null : _handleGoogleSignIn,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF1E293B),
-                    side: BorderSide(color: Colors.grey.withOpacity(0.3)),
+                    side: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),

@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
+import '../utils/toast_helper.dart';
+import 'complete_google_signup_page.dart';
 
 class OtpVerificationPage extends StatefulWidget {
   final String email;
+  final bool isGoogleSignUp;
 
-  const OtpVerificationPage({super.key, required this.email});
+  const OtpVerificationPage({
+    super.key,
+    required this.email,
+    this.isGoogleSignUp = false,
+  });
 
   @override
   State<OtpVerificationPage> createState() => _OtpVerificationPageState();
@@ -31,12 +38,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     final otpCode = _otpController.text.trim();
 
     if (otpCode.length != 8) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Masukkan 8 digit kode OTP'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ToastHelper.showError(context, 'Masukkan 8 digit kode OTP');
       return;
     }
 
@@ -51,91 +53,51 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
 
       await Supabase.instance.client.auth.verifyOTP(
         token: otpCode,
-        type: OtpType.signup,
+        type: widget.isGoogleSignUp ? OtpType.email : OtpType.signup,
         email: widget.email,
       );
 
-      if (mounted) {
-        // Tampilkan dialog berhasil
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            icon: Container(
-              width: 64,
-              height: 64,
-              decoration: const BoxDecoration(
-                color: Color(0xFFD1FAE5),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.check_circle_rounded,
-                color: Color(0xFF10B981),
-                size: 40,
-              ),
-            ),
-            title: const Text(
-              'Verifikasi Berhasil!',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: textPrimary,
-              ),
-            ),
-            content: const Text(
-              'Akun kamu sudah aktif. Selamat datang di BloomFem!',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: textSecondary),
-            ),
-            actions: [
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(); // Tutup dialog
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Text(
-                    'Mulai Sekarang',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
+      final currentUser = Supabase.instance.client.auth.currentUser;
+      if (currentUser != null) {
+        // Ambil profil dari database
+        final profile = await Supabase.instance.client
+            .from('profiles')
+            .select('full_name')
+            .eq('id', currentUser.id)
+            .maybeSingle();
 
-        // Setelah dialog ditutup, arahkan ke MainScreen
-        if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const MainScreen()),
-            (route) => false,
-          );
+        final String? fullName = profile?['full_name'];
+
+        if (widget.isGoogleSignUp && (fullName == null || fullName.trim().isEmpty)) {
+          if (mounted) {
+            ToastHelper.showSuccess(context, 'Verifikasi Berhasil! Silakan lengkapi profil Anda.');
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CompleteGoogleSignUpPage(email: widget.email),
+              ),
+            );
+          }
+          return;
         }
+      }
+
+      if (mounted) {
+        ToastHelper.showSuccess(context, 'Verifikasi Berhasil! Selamat datang di BloomFem.');
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+          (route) => false,
+        );
       }
     } catch (e) {
       debugPrint('OTP Verification Error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Verifikasi gagal: ${e.toString().replaceAll('Exception: ', '')}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        String errorMsg = e.toString().replaceAll('Exception: ', '');
+        if (e is AuthException) {
+          errorMsg = e.message;
+        }
+        ToastHelper.showError(context, 'Verifikasi gagal: $errorMsg');
       }
     } finally {
       if (mounted) {
@@ -156,27 +118,26 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
         throw Exception("Supabase is not initialized.");
       }
 
-      await Supabase.instance.client.auth.resend(
-        type: OtpType.signup,
-        email: widget.email,
-      );
+      if (widget.isGoogleSignUp) {
+        await Supabase.instance.client.auth.signInWithOtp(
+          email: widget.email,
+        );
+      } else {
+        await Supabase.instance.client.auth.resend(
+          type: OtpType.signup,
+          email: widget.email,
+        );
+      }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Kode OTP baru telah dikirim ke email kamu.'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ToastHelper.showSuccess(context, 'Kode OTP baru telah dikirim ke email kamu.');
       }
     } catch (e) {
       debugPrint('Resend OTP Error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal mengirim ulang: ${e.toString().replaceAll('Exception: ', '')}'),
-            backgroundColor: Colors.red,
-          ),
+        ToastHelper.showError(
+          context,
+          'Gagal mengirim ulang: ${e.toString().replaceAll('Exception: ', '')}',
         );
       }
     } finally {

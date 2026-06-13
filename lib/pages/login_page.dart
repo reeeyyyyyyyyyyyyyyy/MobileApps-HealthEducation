@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../main.dart';
+import '../utils/toast_helper.dart';
+import 'complete_google_signup_page.dart';
 import 'register_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -47,12 +49,7 @@ class _LoginPageState extends State<LoginPage> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Berhasil masuk!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ToastHelper.showSuccess(context, 'Berhasil masuk!');
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const MainScreen()),
@@ -66,13 +63,7 @@ class _LoginPageState extends State<LoginPage> {
         if (e is AuthException) {
           errorMsg = e.message;
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal masuk: $errorMsg'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
+        ToastHelper.showError(context, 'Gagal masuk: $errorMsg');
       }
     } finally {
       if (mounted) {
@@ -126,13 +117,33 @@ class _LoginPageState extends State<LoginPage> {
         accessToken: accessToken,
       );
 
+      final currentUser = Supabase.instance.client.auth.currentUser;
+      if (currentUser != null) {
+        // Ambil profil dari database untuk mengecek kelengkapan
+        final profile = await Supabase.instance.client
+            .from('profiles')
+            .select('full_name')
+            .eq('id', currentUser.id)
+            .maybeSingle();
+
+        final String? fullName = profile?['full_name'];
+
+        if (fullName == null || fullName.trim().isEmpty) {
+          if (mounted) {
+            ToastHelper.showSuccess(context, 'Berhasil masuk Google! Silakan lengkapi profil Anda.');
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CompleteGoogleSignUpPage(email: googleUser.email),
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Berhasil masuk dengan Google!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ToastHelper.showSuccess(context, 'Berhasil masuk dengan Google!');
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const MainScreen()),
@@ -146,13 +157,7 @@ class _LoginPageState extends State<LoginPage> {
         if (e is AuthException) {
           errorMsg = e.message;
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal masuk dengan Google: $errorMsg'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
+        ToastHelper.showError(context, 'Gagal masuk dengan Google: $errorMsg');
       }
     } finally {
       if (mounted) {
@@ -232,7 +237,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.grey.withOpacity(0.15)),
+                      borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -312,7 +317,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.grey.withOpacity(0.15)),
+                      borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -342,7 +347,7 @@ class _LoginPageState extends State<LoginPage> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                     elevation: 2,
-                    shadowColor: const Color(0xFF8B5CF6).withOpacity(0.4),
+                    shadowColor: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
                   ),
                   child: _isLoading
                       ? const SizedBox(
@@ -367,7 +372,7 @@ class _LoginPageState extends State<LoginPage> {
                 // Divider "atau masuk dengan"
                 Row(
                   children: [
-                    Expanded(child: Divider(color: Colors.grey.withOpacity(0.3))),
+                    Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.3))),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       child: Text(
@@ -375,7 +380,7 @@ class _LoginPageState extends State<LoginPage> {
                         style: TextStyle(fontSize: 12, color: const Color(0xFF64748B)),
                       ),
                     ),
-                    Expanded(child: Divider(color: Colors.grey.withOpacity(0.3))),
+                    Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.3))),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -385,7 +390,7 @@ class _LoginPageState extends State<LoginPage> {
                   onPressed: _isLoading ? null : _handleGoogleSignIn,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF1E293B),
-                    side: BorderSide(color: Colors.grey.withOpacity(0.3)),
+                    side: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
+import '../utils/toast_helper.dart';
 import 'onboarding_page.dart';
 
 class ProfilPage extends StatelessWidget {
@@ -320,17 +321,29 @@ class ProfilPage extends StatelessWidget {
             builder: (context) => const Center(child: CircularProgressIndicator()),
           );
 
-          // Proses logout dari Supabase
-          await Supabase.instance.client.auth.signOut();
+          try {
+            // Proses logout dari Supabase
+            await Supabase.instance.client.auth.signOut();
 
-          if (context.mounted) {
-            // Tutup loading dan tendang user kembali ke OnboardingPage
-            Navigator.of(context).pop();
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (context) => const OnboardingPage()),
-              (route) => false,
-            );
+            if (context.mounted) {
+              // Tutup loading
+              Navigator.of(context).pop();
+              
+              // Tampilkan toast sukses
+              ToastHelper.showSuccess(context, 'Berhasil keluar akun.');
+              
+              // Tendang user kembali ke OnboardingPage
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const OnboardingPage()),
+                (route) => false,
+              );
+            }
+          } catch (e) {
+            if (context.mounted) {
+              Navigator.of(context).pop(); // Tutup loading
+              ToastHelper.showError(context, 'Gagal keluar: ${e.toString()}');
+            }
           }
         },
       ),
