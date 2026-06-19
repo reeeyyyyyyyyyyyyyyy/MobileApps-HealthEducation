@@ -46,3 +46,4 @@ app.*.map.json
 
 /docs
 /.agents/skills/ui-ux-emil
+/.agents/skills/review-animations
