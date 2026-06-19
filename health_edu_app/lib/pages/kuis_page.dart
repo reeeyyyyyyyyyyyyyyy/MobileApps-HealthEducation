@@ -514,106 +514,150 @@ class _KuisPageState extends State<KuisPage> {
             final quiz = filteredQuizzes[index];
             final quizId = quiz['id'] ?? '';
             final title = quiz['title'] ?? 'Kuis';
+            final description = quiz['description'] ?? 'Asah kemampuanmu lewat kuis seru ini!';
             final xpReward = quiz['xp_reward'] as int? ?? 100;
 
             return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
+                    color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              child: Row(
-                children: [
-                  // Ikon kalender / Kuis
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEDE9FE),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(
-                      Icons.quiz_rounded,
-                      color: primaryColor,
-                      size: 26,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () async {
+                    final bool? quizCompleted = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PlayKuisPage(
+                          quizId: quizId,
+                          quizTitle: title,
+                          xpReward: xpReward,
+                        ),
+                      ),
+                    );
 
-                  // Teks
-                  Expanded(
+                    if (quizCompleted == true) {
+                      _loadQuizzes();
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(20),
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: textPrimary,
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Ikon Kuis
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEDE9FE),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.quiz_rounded,
+                                color: primaryColor,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+
+                            // Title & XP Reward Badge
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  // XP Reward Badge
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFEF3C7),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.bolt_rounded,
+                                          color: Color(0xFFD97706),
+                                          size: 14,
+                                        ),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          '+$xpReward XP',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFFB45309),
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 12),
+                        // Deskripsi Kuis
                         Text(
-                          '+$xpReward XP',
+                          description,
                           style: const TextStyle(
                             fontSize: 13,
                             color: textSecondary,
-                            fontWeight: FontWeight.bold,
+                            height: 1.4,
                           ),
+                        ),
+                        const SizedBox(height: 14),
+                        // Action Footer
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              'Mulai Kuis',
+                              style: TextStyle(
+                                color: primaryColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.arrow_forward_rounded,
+                              color: primaryColor,
+                              size: 16,
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
-
-                  // Tombol Mulai
-                  ElevatedButton(
-                    onPressed: () async {
-                      final bool? quizCompleted = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PlayKuisPage(
-                            quizId: quizId,
-                            quizTitle: title,
-                            xpReward: xpReward,
-                          ),
-                        ),
-                      );
-
-                      if (quizCompleted == true) {
-                        // Refresh the view if needed
-                        _loadQuizzes();
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 22,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: const Text(
-                      'Mulai',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             );
           },

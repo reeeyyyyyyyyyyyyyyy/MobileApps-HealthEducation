@@ -64,7 +64,7 @@ class _PlayKuisPageState extends State<PlayKuisPage> {
   void _handleOptionSelected(int optionIndex) {
     if (_showFeedback) return; // Prevent double clicking or changing answer
 
-    final correctIndex = _questions[_currentQuestionIndex]['correct_index'] as int;
+    final correctIndex = (_questions[_currentQuestionIndex]['correct_index'] as num?)?.toInt() ?? 0;
     final isCorrect = optionIndex == correctIndex;
 
     setState(() {
@@ -200,7 +200,7 @@ class _PlayKuisPageState extends State<PlayKuisPage> {
     final currentQuestion = _questions[_currentQuestionIndex];
     final questionText = currentQuestion['question_text'] ?? '';
     final options = List<String>.from(currentQuestion['options'] ?? []);
-    final correctIndex = currentQuestion['correct_index'] as int;
+    final correctIndex = (currentQuestion['correct_index'] as num?)?.toInt() ?? 0;
     final explanation = currentQuestion['explanation'] ?? '';
 
     final progress = (_currentQuestionIndex + 1) / _questions.length;

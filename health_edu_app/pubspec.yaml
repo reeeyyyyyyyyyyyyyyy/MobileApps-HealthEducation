@@ -39,6 +39,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   youtube_player_flutter: ^10.0.1
   shared_preferences: ^2.2.0
+  flutter_html: ^3.0.0
 
 dev_dependencies:
   flutter_test:

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_html/flutter_html.dart';
 import '../utils/toast_helper.dart';
 
 class DetailModulPage extends StatefulWidget {
@@ -337,59 +338,37 @@ class _DetailModulPageState extends State<DetailModulPage> {
 
   // Pembuat konten interaktif dengan diselingi quote / tip yang menarik
   List<Widget> _buildContentWidgets(String content) {
-    final paragraphs = content.split('\n\n');
     final widgets = <Widget>[];
 
-    for (int i = 0; i < paragraphs.length; i++) {
-      final text = paragraphs[i].trim();
-      if (text.isEmpty) continue;
-
-      if (text.startsWith('•') || text.startsWith('-')) {
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('• ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6))),
-                Expanded(
-                  child: Text(
-                    text.replaceFirst(RegExp(r'^[•-]\s*'), ''),
-                    style: const TextStyle(
-                      fontSize: 15,
-                      color: textPrimary,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+    widgets.add(
+      Html(
+        data: content,
+        style: {
+          "body": Style(
+            fontSize: FontSize(15.0),
+            color: textPrimary,
+            lineHeight: const LineHeight(1.6),
+            margin: Margins.zero,
+            padding: HtmlPaddings.zero,
           ),
-        );
-      } else {
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: Text(
-              text,
-              style: const TextStyle(
-                fontSize: 15,
-                color: textPrimary,
-                height: 1.6,
-                letterSpacing: 0.1,
-              ),
-            ),
+          "p": Style(
+            fontSize: FontSize(15.0),
+            color: textPrimary,
+            lineHeight: const LineHeight(1.6),
+            margin: Margins.only(bottom: 16.0),
           ),
-        );
-      }
+          "li": Style(
+            fontSize: FontSize(15.0),
+            color: textPrimary,
+            lineHeight: const LineHeight(1.5),
+          ),
+        },
+      ),
+    );
 
-      // Sisipkan kartu penyemangat & tips belajar di paragraf tertentu
-      if (i == 0 && paragraphs.length > 1) {
-        widgets.add(_buildEncouragementCard());
-      } else if (i == paragraphs.length - 2 && paragraphs.length > 2) {
-        widgets.add(_buildTipsCard());
-      }
-    }
+    // Sisipkan kartu penyemangat & tips belajar
+    widgets.insert(0, _buildEncouragementCard());
+    widgets.add(_buildTipsCard());
 
     return widgets;
   }
