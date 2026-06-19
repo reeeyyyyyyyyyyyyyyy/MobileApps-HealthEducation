@@ -1,0 +1,118 @@
+/* Custom Filament Redesign - BloomFem Admin */
+
+:root {
+    --fi-btn-border-radius: 12px;
+    --fi-card-border-radius: 20px;
+    --fi-section-border-radius: 20px;
+    --fi-modal-border-radius: 24px;
+    --fi-input-border-radius: 12px;
+}
+
+/* Background gradient matching BloomFem's soothing slate / pastel vibe */
+body {
+    background-attachment: fixed;
+    background-color: #F8FAFC !important;
+}
+
+/* Apply premium typography and layout rounding */
+.fi-layout {
+    font-family: 'Poppins', sans-serif !important;
+}
+
+/* Rounded and floating sidebar */
+.fi-sidebar {
+    border-right: none !important;
+    background-color: #ffffff !important;
+    box-shadow: 4px 0 24px rgba(139, 92, 246, 0.03) !important;
+    margin: 16px;
+    height: calc(100vh - 32px) !important;
+    border-radius: 24px !important;
+    overflow: hidden;
+}
+
+/* Sidebar navigation item design */
+.fi-sidebar-item-button {
+    border-radius: 12px !important;
+    margin: 4px 8px !important;
+    transition: all 0.2s ease-in-out !important;
+}
+
+/* Active sidebar item styling */
+.fi-sidebar-item-active {
+    background-color: rgba(139, 92, 246, 0.08) !important;
+    color: #8B5CF6 !important;
+    font-weight: 600 !important;
+}
+
+.fi-sidebar-item-active svg {
+    color: #8B5CF6 !important;
+}
+
+/* Beautiful custom top bar */
+.fi-topbar {
+    background-color: rgba(248, 250, 252, 0.8) !important;
+    backdrop-filter: blur(12px) !important;
+    border-bottom: none !important;
+}
+
+/* Card styling with soft shadows and rounded corners */
+.fi-ta-ctn, .fi-ta-header, .fi-card, .fi-section, .fi-fo-wizard {
+    border: none !important;
+    box-shadow: 0 10px 30px -10px rgba(148, 163, 184, 0.12), 0 1px 3px rgba(148, 163, 184, 0.03) !important;
+    border-radius: 20px !important;
+    background-color: #ffffff !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+/* Micro-interaction on card hover */
+.fi-card:hover, .fi-section:hover {
+    box-shadow: 0 12px 36px -8px rgba(139, 92, 246, 0.1) !important;
+}
+
+/* Table styling adjustments */
+.fi-ta-table {
+    border-radius: 20px !important;
+    overflow: hidden;
+}
+
+.fi-ta-header-cell {
+    background-color: #F8FAFC !important;
+    font-weight: 600 !important;
+}
+
+/* Forms input fields styling */
+input, select, textarea {
+    border-radius: 12px !important;
+    border-color: #E2E8F0 !important;
+    transition: all 0.2s ease !important;
+}
+
+input:focus, select:focus, textarea:focus {
+    border-color: #8B5CF6 !important;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15) !important;
+}
+
+/* Custom gorgeous Login Page wrapper */
+.fi-simple-layout {
+    background: radial-gradient(circle at 10% 20%, rgba(196, 181, 253, 0.15) 0%, rgba(248, 250, 252, 1) 90%) !important;
+}
+
+.fi-simple-layout .fi-simple-card {
+    border-radius: 24px !important;
+    box-shadow: 0 20px 40px -15px rgba(139, 92, 246, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.8) !important;
+    backdrop-filter: blur(8px) !important;
+    background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Buttons with smooth hover transition */
+button[type="submit"], .fi-btn {
+    border-radius: 12px !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+}
+
+button[type="submit"]:hover, .fi-btn:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2) !important;
+}
