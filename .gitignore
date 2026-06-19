@@ -12,3 +12,4 @@ admin_dashboard/public/storage
 # Mengabaikan folder dokumentasi agar tidak mengotori repositori utama
 docs_flutter/
 docs_laravel/
+docs_bothrevision/
