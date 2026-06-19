@@ -44,13 +44,27 @@ class _BerandaPageState extends State<BerandaPage> {
     if (!isSupabaseInitialized) {
       throw Exception("Supabase belum diinisialisasi.");
     }
-    // Mengambil modul-modul secara dinamis dari database terurut dari buatan terbaru (created_at desc)
-    // agar list selalu terintegrasi secara real-time dengan database.
+    // Mengambil top 3 modul berdasarkan view_count tertinggi (paling banyak dibaca)
+    // Hanya tampilkan modul yang view_count > 0
     final response = await Supabase.instance.client
         .from('modules')
         .select()
-        .order('created_at', ascending: false);
+        .gt('view_count', 0)
+        .order('view_count', ascending: false)
+        .limit(3);
     return List<Map<String, dynamic>>.from(response);
+  }
+
+  // Increment view_count di Supabase saat user membuka modul
+  Future<void> _incrementViewCount(String moduleId) async {
+    try {
+      await Supabase.instance.client.rpc(
+        'increment_view_count',
+        params: {'module_id': moduleId},
+      );
+    } catch (e) {
+      debugPrint('Error incrementing view count: $e');
+    }
   }
 
   IconData _getIconData(String? iconName) {
@@ -146,7 +160,9 @@ class _BerandaPageState extends State<BerandaPage> {
       builder: (context, snapshot) {
         final data = snapshot.data ?? {};
         final fullName = data['full_name'] as String? ?? 'Pengguna';
+        final avatarUrl = data['avatar_url'] as String?;
         final initial = fullName.trim().isNotEmpty ? fullName.trim()[0].toUpperCase() : 'U';
+        final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
 
         return Row(
           children: [
@@ -166,14 +182,18 @@ class _BerandaPageState extends State<BerandaPage> {
               child: CircleAvatar(
                 radius: 24,
                 backgroundColor: const Color(0xFFEDE9FE),
-                child: Text(
-                  initial,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: primaryColor,
-                  ),
-                ),
+                backgroundImage: hasAvatar ? NetworkImage(avatarUrl) : null,
+                onBackgroundImageError: hasAvatar ? (_, _) {} : null,
+                child: !hasAvatar
+                    ? Text(
+                        initial,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                        ),
+                      )
+                    : null,
               ),
             ),
             const SizedBox(width: 12),
@@ -486,12 +506,35 @@ class _BerandaPageState extends State<BerandaPage> {
             ),
           );
         } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox(
+          return SizedBox(
             height: 190,
             child: Center(
-              child: Text(
-                'Tidak ada topik populer.',
-                style: TextStyle(color: textSecondary, fontSize: 13),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.trending_up_rounded,
+                    size: 48,
+                    color: Colors.grey.shade300,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Belum ada topik populer saat ini',
+                    style: TextStyle(
+                      color: textSecondary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Mulai baca modul untuk melihat topik populer!',
+                    style: TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -516,6 +559,10 @@ class _BerandaPageState extends State<BerandaPage> {
 
               return GestureDetector(
                 onTap: () {
+                  final modId = module['id'] as String?;
+                  if (modId != null) {
+                    _incrementViewCount(modId);
+                  }
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -582,13 +629,32 @@ class _BerandaPageState extends State<BerandaPage> {
                             color: Colors.white.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Text(
-                            '$duration • Artikel',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: themeColors['color'],
-                            ),
+                          child: Row(
+                            children: [
+                              Text(
+                                '$duration • Artikel',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: themeColors['color'],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.visibility_rounded,
+                                size: 12,
+                                color: themeColors['color']!.withValues(alpha: 0.6),
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${module['view_count'] ?? 0}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: themeColors['color']!.withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

@@ -28,10 +28,11 @@ class _DetailModulPageState extends State<DetailModulPage> {
   // Pelacakan Status & Progres
   double _progressPercentage = 0.0;
   bool _videoCompleted = false;
-  bool _isAlreadyCompleted = false;
+  bool _isAlreadyCompleted = false; // true jika modul ini sudah pernah 100% di sesi sebelumnya
   bool _isPlaying = false;
   bool _hasVideo = false;
   bool _showVideoReplay = false; // Untuk menonton ulang setelah selesai
+  bool _justCompletedNow = false; // true jika modul baru saja selesai di sesi ini (pertama kali)
   
   // Status internal untuk mencegah spamming notifikasi
   bool _hasCompletedSessionNotification = false;
@@ -102,6 +103,21 @@ class _DetailModulPageState extends State<DetailModulPage> {
     }
 
     _checkAlreadyCompleted();
+    _incrementViewCount();
+  }
+
+  // Increment view_count di Supabase setiap kali modul dibuka
+  Future<void> _incrementViewCount() async {
+    final moduleId = widget.module['id'] as String?;
+    if (moduleId == null) return;
+    try {
+      await Supabase.instance.client.rpc(
+        'increment_view_count',
+        params: {'module_id': moduleId},
+      );
+    } catch (e) {
+      debugPrint('Error incrementing view count: $e');
+    }
   }
 
   @override
@@ -211,15 +227,21 @@ class _DetailModulPageState extends State<DetailModulPage> {
     final moduleId = widget.module['id'] as String?;
     if (moduleId == null) return;
 
+    // Cegah double-call jika sudah memberi notifikasi
+    if (_hasCompletedSessionNotification) return;
+
     if (_isAlreadyCompleted) {
-      if (_progressPercentage >= 100.0 && !_hasCompletedSessionNotification) {
+      // User membaca ulang modul yang sudah pernah diselesaikan sebelumnya
+      if (_progressPercentage >= 99.5) {
         setState(() {
           _hasCompletedSessionNotification = true;
         });
-        ToastHelper.showSuccess(
-          context,
-          'Senang melihatmu membaca kembali modul ini! 📚',
-        );
+        if (mounted) {
+          ToastHelper.showSuccess(
+            context,
+            'Senang melihatmu membaca kembali modul ini! 📚',
+          );
+        }
       }
       return;
     }
@@ -239,6 +261,7 @@ class _DetailModulPageState extends State<DetailModulPage> {
 
     setState(() {
       _isAlreadyCompleted = true;
+      _justCompletedNow = true;
       _hasCompletedSessionNotification = true;
     });
 
@@ -741,32 +764,42 @@ class _DetailModulPageState extends State<DetailModulPage> {
                   ],
 
                   // Indikator status penyelesaian sukses
-                  if (_isAlreadyCompleted && _progressPercentage >= 99.5)
+                  if (_hasCompletedSessionNotification && _progressPercentage >= 99.5)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFD1FAE5),
+                        color: _justCompletedNow
+                            ? const Color(0xFFD1FAE5) // Hijau untuk pertama kali selesai
+                            : const Color(0xFFDBEAFE), // Biru untuk membaca ulang
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                          color: _justCompletedNow
+                              ? const Color(0xFF10B981).withValues(alpha: 0.3)
+                              : const Color(0xFF3B82F6).withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(
                         children: [
-                          const Icon(
-                            Icons.check_circle_rounded,
-                            color: Color(0xFF10B981),
+                          Icon(
+                            _justCompletedNow
+                                ? Icons.check_circle_rounded
+                                : Icons.replay_circle_filled_rounded,
+                            color: _justCompletedNow
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFF3B82F6),
                             size: 24,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              _isAlreadyCompleted && _hasCompletedSessionNotification && !_isAlreadyCompleted
-                                  ? 'Modul selesai! +50 XP telah ditambahkan.'
-                                  : 'Kamu telah menyelesaikan modul ini sebelumnya! 👍',
-                              style: const TextStyle(
-                                color: Color(0xFF065F46),
+                              _justCompletedNow
+                                  ? 'Modul selesai! +50 XP telah ditambahkan. 🎉'
+                                  : 'Kamu telah membaca ulang modul ini hingga akhir! 📚',
+                              style: TextStyle(
+                                color: _justCompletedNow
+                                    ? const Color(0xFF065F46)
+                                    : const Color(0xFF1E3A5F),
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                               ),

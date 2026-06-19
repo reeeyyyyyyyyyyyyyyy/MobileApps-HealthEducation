@@ -3,17 +3,35 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 import '../utils/toast_helper.dart';
 import 'onboarding_page.dart';
+import 'edit_profil_page.dart';
 
-class ProfilPage extends StatelessWidget {
+class ProfilPage extends StatefulWidget {
   const ProfilPage({super.key});
 
+  @override
+  State<ProfilPage> createState() => _ProfilPageState();
+}
+
+class _ProfilPageState extends State<ProfilPage> {
   // === Design System Colors ===
   static const Color primaryColor = Color(0xFF8B5CF6);
   static const Color backgroundColor = Color(0xFFF8FAFC);
   static const Color textPrimary = Color(0xFF1E293B);
   static const Color textSecondary = Color(0xFF64748B);
 
-  Stream<Map<String, dynamic>> _profileStream() {
+  // Default avatar URL fallback
+  static const String defaultAvatarUrl =
+      'https://api.dicebear.com/9.x/micah/png?seed=Default&backgroundColor=F5F3FF';
+
+  late Stream<Map<String, dynamic>> _profileStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileStream = _createProfileStream();
+  }
+
+  Stream<Map<String, dynamic>> _createProfileStream() {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return const Stream.empty();
     return Supabase.instance.client
@@ -21,6 +39,25 @@ class ProfilPage extends StatelessWidget {
         .stream(primaryKey: ['id'])
         .eq('id', user.id)
         .map((list) => list.isNotEmpty ? list.first : {});
+  }
+
+  void _refreshProfile() {
+    setState(() {
+      _profileStream = _createProfileStream();
+    });
+  }
+
+  Future<void> _navigateToEditProfil(Map<String, dynamic> profileData) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditProfilPage(profileData: profileData),
+      ),
+    );
+    // Jika EditProfilPage mengembalikan true (berhasil simpan), refresh stream
+    if (result == true) {
+      _refreshProfile();
+    }
   }
 
   @override
@@ -41,7 +78,7 @@ class ProfilPage extends StatelessWidget {
 
     return SafeArea(
       child: StreamBuilder<Map<String, dynamic>>(
-        stream: _profileStream(),
+        stream: _profileStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: primaryColor));
@@ -60,6 +97,7 @@ class ProfilPage extends StatelessWidget {
           final data = snapshot.data ?? {};
           final fullName = data['full_name'] as String? ?? 'Pengguna';
           final email = currentUser.email ?? 'email@domain.com';
+          final avatarUrl = data['avatar_url'] as String?;
           final level = data['level'] as int? ?? 1;
           final totalXp = data['total_xp'] as int? ?? 0;
           final modulSelesai = data['modul_selesai'] as int? ?? 0;
@@ -72,7 +110,7 @@ class ProfilPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Header Profil
-                  _buildProfileHeader(fullName, email),
+                  _buildProfileHeader(context, fullName, email, avatarUrl, data),
                   const SizedBox(height: 24),
 
                   // Stats Grid
@@ -82,7 +120,7 @@ class ProfilPage extends StatelessWidget {
                   // Menu Pengaturan
                   _buildSectionTitle('Pengaturan Akun'),
                   const SizedBox(height: 12),
-                  _buildSettingsMenu(context),
+                  _buildSettingsMenu(context, data),
                   const SizedBox(height: 16),
                 ],
               ),
@@ -94,40 +132,88 @@ class ProfilPage extends StatelessWidget {
   }
 
   // ─────────────────────────────────────────────
-  //  HEADER PROFIL
+  //  HEADER PROFIL (dengan avatar dari database)
   // ─────────────────────────────────────────────
-  Widget _buildProfileHeader(String fullName, String email) {
+  Widget _buildProfileHeader(
+    BuildContext context,
+    String fullName,
+    String email,
+    String? avatarUrl,
+    Map<String, dynamic> profileData,
+  ) {
     final initial = fullName.trim().isNotEmpty ? fullName.trim()[0].toUpperCase() : 'U';
+    final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
 
     return Center(
       child: Column(
         children: [
           const SizedBox(height: 8),
 
-          // Avatar besar
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: primaryColor, width: 3),
-              boxShadow: [
-                BoxShadow(
-                  color: primaryColor.withValues(alpha: 0.2),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
+          // Avatar besar + tombol edit overlay
+          GestureDetector(
+            onTap: () {
+              _navigateToEditProfil(profileData);
+            },
+            child: Stack(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: primaryColor, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withValues(alpha: 0.2),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 45,
+                    backgroundColor: const Color(0xFFEDE9FE),
+                    backgroundImage: hasAvatar
+                        ? NetworkImage(avatarUrl)
+                        : const NetworkImage(defaultAvatarUrl),
+                    onBackgroundImageError: (_, _) {},
+                    child: !hasAvatar
+                        ? Text(
+                            initial,
+                            style: const TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.bold,
+                              color: primaryColor,
+                            ),
+                          )
+                        : null,
+                  ),
+                ),
+                // Ikon edit kecil di sudut kanan bawah avatar
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: primaryColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryColor.withValues(alpha: 0.3),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.edit_rounded,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                  ),
                 ),
               ],
-            ),
-            child: CircleAvatar(
-              radius: 45,
-              backgroundColor: const Color(0xFFEDE9FE),
-              child: Text(
-                initial,
-                style: const TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  color: primaryColor,
-                ),
-              ),
             ),
           ),
           const SizedBox(height: 14),
@@ -288,8 +374,17 @@ class ProfilPage extends StatelessWidget {
   // ─────────────────────────────────────────────
   //  SETTINGS MENU
   // ─────────────────────────────────────────────
-  Widget _buildSettingsMenu(BuildContext context) {
+  Widget _buildSettingsMenu(BuildContext context, Map<String, dynamic> profileData) {
     final List<_MenuItemData> menuItems = [
+      _MenuItemData(
+        icon: Icons.person_rounded,
+        iconColor: primaryColor,
+        title: 'Edit Profil',
+        isDestructive: false,
+        onTap: () {
+          _navigateToEditProfil(profileData);
+        },
+      ),
       _MenuItemData(
         icon: Icons.bookmark_border_rounded,
         iconColor: primaryColor,
