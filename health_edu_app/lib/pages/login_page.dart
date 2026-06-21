@@ -6,6 +6,7 @@ import '../main.dart';
 import '../utils/toast_helper.dart';
 import 'complete_google_signup_page.dart';
 import 'register_page.dart';
+import 'setup_tracker_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -28,6 +29,41 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  Future<void> _checkProfileAndNavigate(String userId) async {
+    try {
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('has_menstruated')
+          .eq('id', userId)
+          .maybeSingle();
+
+      if (mounted) {
+        if (profile == null || profile['has_menstruated'] == null) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const SetupTrackerPage()),
+            (route) => false,
+          );
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+            (route) => false,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking profile after login: $e');
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+          (route) => false,
+        );
+      }
+    }
+  }
+
   Future<void> _handleEmailSignIn() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -43,18 +79,22 @@ class _LoginPageState extends State<LoginPage> {
         throw Exception("Supabase is not initialized. Running in Mock Mode.");
       }
 
-      await Supabase.instance.client.auth.signInWithPassword(
+      final authResponse = await Supabase.instance.client.auth.signInWithPassword(
         email: email,
         password: password,
       );
 
       if (mounted) {
         ToastHelper.showSuccess(context, 'Berhasil masuk!');
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const MainScreen()),
-          (route) => false,
-        );
+        if (authResponse.user != null) {
+          await _checkProfileAndNavigate(authResponse.user!.id);
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+            (route) => false,
+          );
+        }
       }
     } catch (e) {
       debugPrint('Email Sign-In Error: $e');
@@ -144,11 +184,15 @@ class _LoginPageState extends State<LoginPage> {
 
       if (mounted) {
         ToastHelper.showSuccess(context, 'Berhasil masuk dengan Google!');
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const MainScreen()),
-          (route) => false,
-        );
+        if (currentUser != null) {
+          await _checkProfileAndNavigate(currentUser.id);
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+            (route) => false,
+          );
+        }
       }
     } catch (e) {
       debugPrint('Google Sign-In Error: $e');

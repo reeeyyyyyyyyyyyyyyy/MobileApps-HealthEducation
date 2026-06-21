@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 import 'onboarding_page.dart';
+import 'setup_tracker_page.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -49,7 +50,7 @@ class _SplashPageState extends State<SplashPage>
     _checkSessionAndNavigate();
   }
 
-  void _checkSessionAndNavigate() {
+  void _checkSessionAndNavigate() async {
     Session? session;
     if (isSupabaseInitialized) {
       try {
@@ -60,10 +61,36 @@ class _SplashPageState extends State<SplashPage>
     }
 
     if (session != null) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MainScreen()),
-      );
+      try {
+        final userId = session.user.id;
+        final response = await Supabase.instance.client
+            .from('profiles')
+            .select('has_menstruated')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (mounted) {
+          if (response == null || response['has_menstruated'] == null) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const SetupTrackerPage()),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const MainScreen()),
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('Failed to fetch profile in splash: $e');
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+          );
+        }
+      }
     } else {
       Navigator.pushReplacement(
         context,

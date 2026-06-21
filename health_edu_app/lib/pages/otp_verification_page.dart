@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 import '../utils/toast_helper.dart';
 import 'complete_google_signup_page.dart';
+import 'setup_tracker_page.dart';
 
 class OtpVerificationPage extends StatefulWidget {
   final String email;
@@ -86,7 +87,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
         ToastHelper.showSuccess(context, 'Verifikasi Berhasil! Selamat datang di BloomFem.');
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => const MainScreen()),
+          MaterialPageRoute(builder: (context) => const SetupTrackerPage()),
           (route) => false,
         );
       }

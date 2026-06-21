@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 import '../utils/toast_helper.dart';
+import 'setup_tracker_page.dart';
 
 class CompleteGoogleSignUpPage extends StatefulWidget {
   final String email;
@@ -67,10 +68,10 @@ class _CompleteGoogleSignUpPageState extends State<CompleteGoogleSignUpPage> {
           .eq('id', user.id);
 
       if (mounted) {
-        ToastHelper.showSuccess(context, 'Profil berhasil dilengkapi! Selamat belajar.');
+        ToastHelper.showSuccess(context, 'Profil berhasil dilengkapi! Mari atur pelacak siklus haidmu.');
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => const MainScreen()),
+          MaterialPageRoute(builder: (context) => const SetupTrackerPage()),
           (route) => false,
         );
       }

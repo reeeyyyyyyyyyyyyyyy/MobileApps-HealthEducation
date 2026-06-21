@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
+import '../utils/toast_helper.dart';
 import 'detail_modul_page.dart';
+import 'tracker_detail_page.dart';
 
 class BerandaPage extends StatefulWidget {
   const BerandaPage({super.key});
@@ -130,6 +132,10 @@ class _BerandaPageState extends State<BerandaPage> {
             _buildHeader(),
             const SizedBox(height: 20),
 
+            // Smart Tracker Widget
+            _buildSmartTrackerWidget(context),
+            const SizedBox(height: 20),
+
             // 2) Banner Promosi
             _buildPromoBanner(context),
             const SizedBox(height: 24),
@@ -251,8 +257,200 @@ class _BerandaPageState extends State<BerandaPage> {
     );
   }
 
+  Widget _buildSmartTrackerWidget(BuildContext context) {
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: _profileStream(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const SizedBox();
+        }
+
+        final data = snapshot.data!;
+        final bool? hasMenstruated = data['has_menstruated'] as bool?;
+        
+        if (hasMenstruated == null) {
+          return const SizedBox();
+        }
+
+        String cardTitle = '';
+        String cardSubtitle = '';
+        String buttonText = 'Lihat Detail Kalender';
+        
+        final String? lastPeriodDateStr = data['last_period_date'] as String?;
+        final int avgCycleLength = data['avg_cycle_length'] as int? ?? 28;
+        
+        DateTime? lastPeriodDate;
+        int difference = 0;
+        
+        if (lastPeriodDateStr != null) {
+          lastPeriodDate = DateTime.tryParse(lastPeriodDateStr);
+          if (lastPeriodDate != null) {
+            final predictionDate = lastPeriodDate.add(Duration(days: avgCycleLength));
+            final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+            final target = DateTime(predictionDate.year, predictionDate.month, predictionDate.day);
+            difference = target.difference(today).inDays;
+          }
+        }
+
+        if (hasMenstruated == false) {
+          cardTitle = 'Fase Persiapan 🌸';
+          cardSubtitle = 'Yuk catat mood dan gejalamu hari ini untuk mengenali tubuhmu!';
+        } else {
+          if (lastPeriodDateStr != null) {
+            if (difference > 0) {
+              cardTitle = 'Prediksi Haid: H-$difference ⏳';
+              cardSubtitle = 'Haid berikutnya diperkirakan akan mulai dalam $difference hari.';
+            } else if (difference == 0) {
+              cardTitle = 'Prediksi Haid: Hari Ini! 🌸';
+              cardSubtitle = 'Haid diprediksi mulai hari ini. Bersiaplah dan tetap tenang!';
+            } else {
+              final lateDays = difference.abs();
+              cardTitle = 'Terlambat $lateDays Hari ⚠️';
+              cardSubtitle = 'Haid terlambat $lateDays hari. Jangan panik, tetap tenang!';
+            }
+          } else {
+            cardTitle = 'Fase Persiapan 🌸';
+            cardSubtitle = 'Yuk catat mood dan gejalamu hari ini untuk mengenali tubuhmu!';
+          }
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFBCFE8), Color(0xFFE9D5FF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFEC4899).withValues(alpha: 0.15),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const TrackerDetailPage()),
+                );
+              },
+              borderRadius: BorderRadius.circular(24),
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            cardTitle,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF581C87),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            cardSubtitle,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF6B21A8),
+                              height: 1.4,
+                            ),
+                          ),
+                          if (hasMenstruated == true && lastPeriodDate != null && difference < 0) ...[
+                            const SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                try {
+                                  final newDate = lastPeriodDate!.add(const Duration(days: 7));
+                                  final newDateStr = newDate.toIso8601String().split('T')[0];
+                                  final user = Supabase.instance.client.auth.currentUser;
+                                  if (user != null) {
+                                    await Supabase.instance.client
+                                        .from('profiles')
+                                        .update({'last_period_date': newDateStr})
+                                        .eq('id', user.id);
+                                    if (context.mounted) {
+                                      ToastHelper.showSuccess(context, 'Siklus berhasil diperbarui (diundur 7 hari) 🌸');
+                                    }
+                                  }
+                                } catch (e) {
+                                  debugPrint('Failed to delay cycle: $e');
+                                }
+                              },
+                              icon: const Icon(Icons.history_rounded, size: 16),
+                              label: const Text('Belum Haid? (Undur 7 Hari)'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white.withValues(alpha: 0.8),
+                                foregroundColor: const Color(0xFF9D178D),
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Text(
+                                buttonText,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF9D178D),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 14,
+                                color: Color(0xFF9D178D),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.track_changes_rounded,
+                        color: Color(0xFFD946EF),
+                        size: 32,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // ─────────────────────────────────────────────
   //  BANNER PROMOSI (Interaktif)
+
   // ─────────────────────────────────────────────
   Widget _buildPromoBanner(BuildContext context) {
     return Material(
