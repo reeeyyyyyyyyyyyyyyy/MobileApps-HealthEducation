@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../utils/toast_helper.dart';
+import '../utils/ai_service.dart';
 import 'detail_modul_page.dart';
 import 'tracker_detail_page.dart';
 
@@ -352,7 +353,39 @@ class _BerandaPageState extends State<BerandaPage> {
     );
   }
 
-  void _showPeriodEndedEarlyDialog(BuildContext context, String userId, int actualDuration) {
+  void _showLoadingDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5CF6)),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showPeriodEndedEarlyDialog(BuildContext context, String userId, int actualDuration, String aiAnalysis) {
     showDialog(
       context: context,
       builder: (context) {
@@ -369,7 +402,7 @@ class _BerandaPageState extends State<BerandaPage> {
               const Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 64),
               const SizedBox(height: 16),
               Text(
-                'Hebat, catatan haidmu telah disimpan selama $actualDuration hari!\n\n💡 Info Medis: Siklus haid normal bagi remaja biasanya berlangsung selama 3 hingga 7 hari. Durasi haidmu kali ini ($actualDuration hari) berada dalam batas yang normal. Jaga kesehatan reproduksimu selalu ya!',
+                'Hebat, catatan haidmu telah disimpan selama $actualDuration hari!\n\n💡 Analisis AI BloomFem:\n$aiAnalysis',
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B), height: 1.4),
               ),
@@ -577,9 +610,43 @@ class _BerandaPageState extends State<BerandaPage> {
           cardTitle = 'Menstruasi: Hari ke-$currentPeriodDay 🌸';
           cardSubtitle = 'Tetap jaga kebersihan tubuh, minum cukup air, dan istirahat yang cukup ya!';
           customButton = ElevatedButton.icon(
-            onPressed: () {
+            onPressed: () async {
               final actualDuration = currentPeriodDay < 3 ? 3 : currentPeriodDay;
-              _showPeriodEndedEarlyDialog(context, userId, actualDuration);
+              
+              _showLoadingDialog(context, 'Menganalisis siklusmu dengan AI...');
+              
+              List<String> symptoms = [];
+              try {
+                if (lastPeriodDateStr != null) {
+                  final logsResponse = await Supabase.instance.client
+                      .from('daily_logs')
+                      .select('symptoms')
+                      .eq('user_id', userId)
+                      .gte('log_date', lastPeriodDateStr)
+                      .lte('log_date', todayStr);
+                  
+                  for (var row in logsResponse) {
+                    final list = row['symptoms'] as List<dynamic>?;
+                    if (list != null) {
+                      for (var sym in list) {
+                        final s = sym.toString();
+                        if (s != 'Menstruasi (Haid)' && !symptoms.contains(s)) {
+                          symptoms.add(s);
+                        }
+                      }
+                    }
+                  }
+                }
+              } catch (e) {
+                debugPrint('Error fetching symptoms for AI: $e');
+              }
+              
+              final analysis = await AIService.analyzePeriod(actualDuration, symptoms);
+              
+              if (context.mounted) {
+                Navigator.pop(context); // Close loading
+                _showPeriodEndedEarlyDialog(context, userId, actualDuration, analysis);
+              }
             },
             icon: const Icon(Icons.clean_hands_rounded, size: 16),
             label: const Text('Sudah Bersih? (Akhiri Lebih Cepat)'),
@@ -623,14 +690,49 @@ class _BerandaPageState extends State<BerandaPage> {
               const SizedBox(width: 8),
               ElevatedButton.icon(
                 onPressed: () async {
+                  _showLoadingDialog(context, 'Menganalisis siklusmu dengan AI...');
+                  
+                  List<String> symptoms = [];
+                  try {
+                    if (lastPeriodDateStr != null) {
+                      final logsResponse = await Supabase.instance.client
+                          .from('daily_logs')
+                          .select('symptoms')
+                          .eq('user_id', userId)
+                          .gte('log_date', lastPeriodDateStr)
+                          .lte('log_date', todayStr);
+                      
+                      for (var row in logsResponse) {
+                        final list = row['symptoms'] as List<dynamic>?;
+                        if (list != null) {
+                          for (var sym in list) {
+                            final s = sym.toString();
+                            if (s != 'Menstruasi (Haid)' && !symptoms.contains(s)) {
+                              symptoms.add(s);
+                            }
+                          }
+                        }
+                      }
+                    }
+                  } catch (e) {
+                    debugPrint('Error fetching symptoms for AI: $e');
+                  }
+                  
+                  final analysis = await AIService.analyzePeriod(avgPeriodDuration, symptoms);
+                  
+                  if (context.mounted) {
+                    Navigator.pop(context); // Close loading
+                  }
+                  
                   try {
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setString('confirmed_finished_date_$userId', todayStr);
                     setState(() {
                       _confirmedFinishedDate = todayStr;
                     });
+                    
                     if (context.mounted) {
-                      ToastHelper.showSuccess(context, 'Selamat! Masa haidmu telah berakhir bersih. 🌸');
+                      _showPeriodEndedEarlyDialog(context, userId, avgPeriodDuration, analysis);
                     }
                   } catch (e) {
                     debugPrint('Failed to save confirmation: $e');

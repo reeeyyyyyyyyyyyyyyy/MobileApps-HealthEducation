@@ -68,7 +68,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
     try {
       final response = await _supabase
           .from('daily_logs')
-          .select('log_date, symptoms')
+          .select('log_date, symptoms, is_period_day')
           .eq('user_id', user.id);
 
       final List<dynamic> data = response;
@@ -82,8 +82,9 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
           final normalized = DateTime(parsedDate.year, parsedDate.month, parsedDate.day);
           dates.add(normalized);
           
+          final isPeriodDay = row['is_period_day'] as bool? ?? false;
           final symptomsRaw = row['symptoms'] as List<dynamic>?;
-          if (symptomsRaw != null && symptomsRaw.contains('Menstruasi (Haid)')) {
+          if (isPeriodDay || (symptomsRaw != null && symptomsRaw.contains('Menstruasi (Haid)'))) {
             manualPeriods.add(normalized);
           }
         }
@@ -95,6 +96,47 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
       });
     } catch (e) {
       debugPrint('Error fetching logged dates: $e');
+    }
+  }
+
+  Future<void> _recalculateCycle() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
+      final thirtyDaysAgoStr = thirtyDaysAgo.toIso8601String().split('T')[0];
+
+      final response = await _supabase
+          .from('daily_logs')
+          .select('log_date')
+          .eq('user_id', user.id)
+          .eq('is_period_day', true)
+          .gte('log_date', thirtyDaysAgoStr);
+
+      final List<dynamic> data = response;
+      if (data.isEmpty) return;
+
+      List<DateTime> periodDates = data.map((row) {
+        return DateTime.parse(row['log_date'] as String);
+      }).toList();
+
+      // Sort ascending to find the smallest date (Start Date)
+      periodDates.sort((a, b) => a.compareTo(b));
+
+      final startDate = periodDates.first;
+      final startDateStr = startDate.toIso8601String().split('T')[0];
+      final duration = periodDates.length;
+
+      await _supabase.from('profiles').update({
+        'has_menstruated': true,
+        'last_period_date': startDateStr,
+        'avg_period_duration': duration,
+      }).eq('id', user.id);
+
+      await _fetchUserProfile();
+    } catch (e) {
+      debugPrint('Error recalculating cycle: $e');
     }
   }
 
@@ -228,17 +270,19 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
     // Fetch existing log for selected day if any
     String? existingMood;
     List<String> existingSymptoms = [];
+    bool existingIsPeriodDay = false;
     
     try {
       final logResponse = await _supabase
           .from('daily_logs')
-          .select('mood, symptoms')
+          .select('mood, symptoms, is_period_day')
           .eq('user_id', user.id)
           .eq('log_date', dateStr)
           .maybeSingle();
 
       if (logResponse != null) {
         existingMood = logResponse['mood'] as String?;
+        existingIsPeriodDay = logResponse['is_period_day'] as bool? ?? false;
         final symptomsRaw = logResponse['symptoms'] as List<dynamic>?;
         if (symptomsRaw != null) {
           existingSymptoms = symptomsRaw.map((e) => e.toString()).toList();
@@ -258,39 +302,18 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
         return _DailyLogForm(
           initialMood: existingMood,
           initialSymptoms: existingSymptoms,
-          onSave: (mood, symptoms) async {
+          initialIsPeriodDay: existingIsPeriodDay,
+          onSave: (mood, symptoms, isPeriodDay) async {
             try {
               await _supabase.from('daily_logs').upsert({
                 'user_id': user.id,
                 'log_date': dateStr,
                 'mood': mood,
                 'symptoms': symptoms,
+                'is_period_day': isPeriodDay,
               }, onConflict: 'user_id,log_date');
 
-              // If "Menstruasi (Haid)" is selected, potentially update last_period_date
-              if (symptoms.contains('Menstruasi (Haid)')) {
-                bool shouldUpdateProfile = false;
-                if (_lastPeriodDate == null) {
-                  shouldUpdateProfile = true;
-                } else {
-                  final diff = selectedDate.difference(_lastPeriodDate!).inDays.abs();
-                  // If it's at least avg_period_duration days away from the last period start date, update it
-                  if (diff >= _avgPeriodDuration) {
-                    shouldUpdateProfile = true;
-                  }
-                }
-
-                if (shouldUpdateProfile || _hasMenstruated == false) {
-                  await _supabase.from('profiles').update({
-                    'has_menstruated': true,
-                    'last_period_date': dateStr,
-                    'avg_period_duration': 5,
-                    'avg_cycle_length': 28,
-                  }).eq('id', user.id);
-                  await _fetchUserProfile();
-                }
-              }
-              
+              await _recalculateCycle();
               await _fetchLoggedDates();
               
               if (context.mounted) {
@@ -594,11 +617,13 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
 class _DailyLogForm extends StatefulWidget {
   final String? initialMood;
   final List<String> initialSymptoms;
-  final Function(String mood, List<String> symptoms) onSave;
+  final bool initialIsPeriodDay;
+  final Function(String mood, List<String> symptoms, bool isPeriodDay) onSave;
 
   const _DailyLogForm({
     this.initialMood,
     required this.initialSymptoms,
+    required this.initialIsPeriodDay,
     required this.onSave,
   });
 
@@ -609,6 +634,7 @@ class _DailyLogForm extends StatefulWidget {
 class _DailyLogFormState extends State<_DailyLogForm> {
   String? _selectedMood;
   List<String> _selectedSymptoms = [];
+  bool _isPeriodDay = false;
   bool _isSaving = false;
 
   final List<Map<String, String>> _moods = [
@@ -630,6 +656,7 @@ class _DailyLogFormState extends State<_DailyLogForm> {
     super.initState();
     _selectedMood = widget.initialMood;
     _selectedSymptoms = List.from(widget.initialSymptoms);
+    _isPeriodDay = widget.initialIsPeriodDay;
   }
 
   @override
@@ -674,6 +701,44 @@ class _DailyLogFormState extends State<_DailyLogForm> {
               ),
             ),
             const SizedBox(height: 20),
+
+            // SwitchListTile for is_period_day
+            SwitchListTile(
+              title: const Text(
+                'Saya sedang haid hari ini 🌸',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF581C87),
+                ),
+              ),
+              subtitle: const Text(
+                'Tandai jika Anda mengalami menstruasi pada hari ini.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF6B21A8),
+                ),
+              ),
+              activeThumbColor: const Color(0xFFEC4899),
+              activeTrackColor: const Color(0xFFFCE7F3),
+              inactiveThumbColor: Colors.grey.shade400,
+              inactiveTrackColor: Colors.grey.shade200,
+              value: _isPeriodDay,
+              onChanged: (bool value) {
+                setState(() {
+                  _isPeriodDay = value;
+                  if (value) {
+                    if (!_selectedSymptoms.contains('Menstruasi (Haid)')) {
+                      _selectedSymptoms.add('Menstruasi (Haid)');
+                    }
+                  } else {
+                    _selectedSymptoms.remove('Menstruasi (Haid)');
+                  }
+                });
+              },
+            ),
+            const Divider(),
+            const SizedBox(height: 12),
 
             // Mood Selector
             const Text(
@@ -737,8 +802,14 @@ class _DailyLogFormState extends State<_DailyLogForm> {
                     setState(() {
                       if (selected) {
                         _selectedSymptoms.add(symptom);
+                        if (symptom == 'Menstruasi (Haid)') {
+                          _isPeriodDay = true;
+                        }
                       } else {
                         _selectedSymptoms.remove(symptom);
+                        if (symptom == 'Menstruasi (Haid)') {
+                          _isPeriodDay = false;
+                        }
                       }
                     });
                   },
@@ -755,7 +826,7 @@ class _DailyLogFormState extends State<_DailyLogForm> {
                       setState(() {
                         _isSaving = true;
                       });
-                      await widget.onSave(_selectedMood!, _selectedSymptoms);
+                      await widget.onSave(_selectedMood!, _selectedSymptoms, _isPeriodDay);
                       if (mounted) {
                         setState(() {
                           _isSaving = false;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'pages/beranda_page.dart';
 import 'pages/belajar_page.dart';
 import 'pages/kuis_page.dart';
@@ -19,6 +20,12 @@ bool get isSupabaseInitialized {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint('Failed to load env: $e');
+  }
   
   try {
     // Attempt initialization with config credentials
