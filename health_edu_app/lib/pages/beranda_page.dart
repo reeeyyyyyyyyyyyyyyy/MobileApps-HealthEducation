@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../utils/toast_helper.dart';
 import 'detail_modul_page.dart';
@@ -21,6 +22,7 @@ class _BerandaPageState extends State<BerandaPage> {
   static const Color textSecondary = Color(0xFF64748B);
 
   late Future<List<Map<String, dynamic>>> _popularModulesFuture;
+  String? _confirmedFinishedDate;
 
   Stream<Map<String, dynamic>> _profileStream() {
     final user = Supabase.instance.client.auth.currentUser;
@@ -35,7 +37,21 @@ class _BerandaPageState extends State<BerandaPage> {
   @override
   void initState() {
     super.initState();
+    _loadConfirmedFinishedDate();
     _loadPopularModules();
+  }
+
+  Future<void> _loadConfirmedFinishedDate() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _confirmedFinishedDate = prefs.getString('confirmed_finished_date_${user.id}');
+      });
+    } catch (e) {
+      debugPrint('Error loading confirmed finished date: $e');
+    }
   }
 
   void _loadPopularModules() {
@@ -257,6 +273,230 @@ class _BerandaPageState extends State<BerandaPage> {
     );
   }
 
+  void _showFirstHaidDialog(BuildContext context, String userId) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: const Text(
+            'Selamat Memasuki Fase Baru! 🌸',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Color(0xFF581C87),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.spa_rounded,
+                color: Color(0xFFEC4899),
+                size: 64,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Menstruasi pertama (menarche) adalah tanda sehat bahwa tubuhmu sedang tumbuh dewasa secara alami. Jangan khawatir, BloomFem akan mendampingimu untuk mencatat dan memahami siklus sehatmu!\n\nKami akan mengeset perkiraan awal haid selama 5 hari dengan siklus 28 hari. Kamu bisa menyesuaikannya kapan saja.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF1E293B),
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            Center(
+              child: ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context); // Close dialog
+                  try {
+                    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+                    await Supabase.instance.client
+                        .from('profiles')
+                        .update({
+                          'has_menstruated': true,
+                          'last_period_date': todayStr,
+                          'avg_period_duration': 5,
+                          'avg_cycle_length': 28,
+                        })
+                        .eq('id', userId);
+                    if (context.mounted) {
+                      ToastHelper.showSuccess(context, 'Selamat! Pelacakan siklus haid pertamamu telah aktif. 🌸');
+                    }
+                  } catch (e) {
+                    debugPrint('Failed to initialize first period: $e');
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  'Mulai Pelacakan',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showPeriodEndedEarlyDialog(BuildContext context, String userId, int actualDuration) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text(
+            'Haid Selesai! 🌸',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Color(0xFF581C87), fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 64),
+              const SizedBox(height: 16),
+              Text(
+                'Hebat, catatan haidmu telah disimpan selama $actualDuration hari!\n\n💡 Info Medis: Siklus haid normal bagi remaja biasanya berlangsung selama 3 hingga 7 hari. Durasi haidmu kali ini ($actualDuration hari) berada dalam batas yang normal. Jaga kesehatan reproduksimu selalu ya!',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B), height: 1.4),
+              ),
+            ],
+          ),
+          actions: [
+            Center(
+              child: ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  try {
+                    await Supabase.instance.client
+                        .from('profiles')
+                        .update({'avg_period_duration': actualDuration})
+                        .eq('id', userId);
+                  } catch (e) {
+                    debugPrint('Failed to update period duration: $e');
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showMenorrhagiaDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+              SizedBox(width: 8),
+              Text(
+                'Catatan Medis Penting',
+                style: TextStyle(color: Color(0xFF581C87), fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Menstruasi yang berlangsung lebih dari 7 hari (dikenal secara medis sebagai Menoragia) sangat umum dialami oleh remaja karena kadar hormon tubuh yang masih berkembang dan tidak stabil.\n\nNamun, jika haid terus berlanjut secara berlebihan, disertai rasa nyeri yang hebat, atau tubuh terasa lemas/pusing, disarankan untuk berdiskusi dengan orang tua dan berkonsultasi dengan dokter untuk memastikan kesehatanmu ya, Bloom! 🌸',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: Color(0xFF1E293B), height: 1.4),
+          ),
+          actions: [
+            Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: const Text('Paham', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _handleExtendPeriod(BuildContext context, String userId, int newDuration, DateTime today) async {
+    try {
+      // 1. Update avg_period_duration in profiles
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'avg_period_duration': newDuration})
+          .eq('id', userId);
+
+      // 2. Upsert daily log for today to check "Menstruasi (Haid)"
+      final dateStr = today.toIso8601String().split('T')[0];
+      
+      final logResponse = await Supabase.instance.client
+          .from('daily_logs')
+          .select('symptoms, mood')
+          .eq('user_id', userId)
+          .eq('log_date', dateStr)
+          .maybeSingle();
+
+      List<String> symptoms = ['Menstruasi (Haid)'];
+      String mood = 'Sensitif'; // default if none
+      
+      if (logResponse != null) {
+        mood = logResponse['mood'] as String? ?? 'Sensitif';
+        final existing = logResponse['symptoms'] as List<dynamic>?;
+        if (existing != null) {
+          symptoms = existing.map((e) => e.toString()).toList();
+          if (!symptoms.contains('Menstruasi (Haid)')) {
+            symptoms.add('Menstruasi (Haid)');
+          }
+        }
+      }
+
+      await Supabase.instance.client.from('daily_logs').upsert({
+        'user_id': userId,
+        'log_date': dateStr,
+        'mood': mood,
+        'symptoms': symptoms,
+      }, onConflict: 'user_id,log_date');
+
+      if (context.mounted) {
+        ToastHelper.showSuccess(context, 'Masa haid berhasil diperpanjang! 🌸');
+        
+        // If duration > 7 days, show Menorrhagia warning dialog
+        if (newDuration > 7) {
+          _showMenorrhagiaDialog(context);
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to extend period: $e');
+    }
+  }
+
   Widget _buildSmartTrackerWidget(BuildContext context) {
     return StreamBuilder<Map<String, dynamic>>(
       stream: _profileStream(),
@@ -266,6 +506,7 @@ class _BerandaPageState extends State<BerandaPage> {
         }
 
         final data = snapshot.data!;
+        final String userId = data['id'] as String;
         final bool? hasMenstruated = data['has_menstruated'] as bool?;
         
         if (hasMenstruated == null) {
@@ -278,24 +519,143 @@ class _BerandaPageState extends State<BerandaPage> {
         
         final String? lastPeriodDateStr = data['last_period_date'] as String?;
         final int avgCycleLength = data['avg_cycle_length'] as int? ?? 28;
+        final int avgPeriodDuration = data['avg_period_duration'] as int? ?? 5;
         
         DateTime? lastPeriodDate;
         int difference = 0;
+        bool isCurrentlyInPeriod = false;
+        int currentPeriodDay = 0;
+        bool isConfirmationDay = false;
         
+        final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+        final todayStr = today.toIso8601String().split('T')[0];
+
         if (lastPeriodDateStr != null) {
           lastPeriodDate = DateTime.tryParse(lastPeriodDateStr);
           if (lastPeriodDate != null) {
             final predictionDate = lastPeriodDate.add(Duration(days: avgCycleLength));
-            final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
             final target = DateTime(predictionDate.year, predictionDate.month, predictionDate.day);
             difference = target.difference(today).inDays;
+
+            // Check if today falls in the active period
+            currentPeriodDay = today.difference(lastPeriodDate).inDays + 1;
+            isCurrentlyInPeriod = currentPeriodDay >= 1 && currentPeriodDay <= avgPeriodDuration;
+
+            // Check if today is the day after the predicted period (confirmation phase)
+            final predictedEnd = lastPeriodDate.add(Duration(days: avgPeriodDuration));
+            final bool isAlreadyConfirmed = _confirmedFinishedDate == todayStr;
+            isConfirmationDay = !isAlreadyConfirmed && 
+                (today.isAtSameMomentAs(predictedEnd) || 
+                (today.isAfter(predictedEnd) && today.isBefore(predictedEnd.add(const Duration(days: 2)))));
           }
         }
+
+        Widget? customButton;
 
         if (hasMenstruated == false) {
           cardTitle = 'Fase Persiapan 🌸';
           cardSubtitle = 'Yuk catat mood dan gejalamu hari ini untuk mengenali tubuhmu!';
+          customButton = ElevatedButton.icon(
+            onPressed: () => _showFirstHaidDialog(context, userId),
+            icon: const Icon(Icons.favorite_rounded, size: 16),
+            label: const Text('Saya Mendapat Haid Pertama!'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.8),
+              foregroundColor: const Color(0xFFEC4899),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          );
+        } else if (isCurrentlyInPeriod) {
+          cardTitle = 'Menstruasi: Hari ke-$currentPeriodDay 🌸';
+          cardSubtitle = 'Tetap jaga kebersihan tubuh, minum cukup air, dan istirahat yang cukup ya!';
+          customButton = ElevatedButton.icon(
+            onPressed: () {
+              final actualDuration = currentPeriodDay < 3 ? 3 : currentPeriodDay;
+              _showPeriodEndedEarlyDialog(context, userId, actualDuration);
+            },
+            icon: const Icon(Icons.clean_hands_rounded, size: 16),
+            label: const Text('Sudah Bersih? (Akhiri Lebih Cepat)'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.8),
+              foregroundColor: const Color(0xFFEC4899),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          );
+        } else if (isConfirmationDay) {
+          cardTitle = 'Konfirmasi Selesai Haid? 🌸';
+          cardSubtitle = 'Berdasarkan prediksimu, haidmu seharusnya sudah selesai. Apakah haidmu masih berlangsung hari ini?';
+          customButton = Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => _handleExtendPeriod(context, userId, avgPeriodDuration + 1, today),
+                icon: const Icon(Icons.favorite_rounded, size: 16),
+                label: const Text('Masih Haid'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.8),
+                  foregroundColor: const Color(0xFFEC4899),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  try {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('confirmed_finished_date_$userId', todayStr);
+                    setState(() {
+                      _confirmedFinishedDate = todayStr;
+                    });
+                    if (context.mounted) {
+                      ToastHelper.showSuccess(context, 'Selamat! Masa haidmu telah berakhir bersih. 🌸');
+                    }
+                  } catch (e) {
+                    debugPrint('Failed to save confirmation: $e');
+                  }
+                },
+                icon: const Icon(Icons.check_circle_rounded, size: 16),
+                label: const Text('Sudah Selesai'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.8),
+                  foregroundColor: const Color(0xFF10B981),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          );
         } else {
+          // Prediction/Late States
           if (lastPeriodDateStr != null) {
             if (difference > 0) {
               cardTitle = 'Prediksi Haid: H-$difference ⏳';
@@ -307,6 +667,38 @@ class _BerandaPageState extends State<BerandaPage> {
               final lateDays = difference.abs();
               cardTitle = 'Terlambat $lateDays Hari ⚠️';
               cardSubtitle = 'Haid terlambat $lateDays hari. Jangan panik, tetap tenang!';
+              customButton = ElevatedButton.icon(
+                onPressed: () async {
+                  try {
+                    final newDate = lastPeriodDate!.add(const Duration(days: 7));
+                    final newDateStr = newDate.toIso8601String().split('T')[0];
+                    await Supabase.instance.client
+                        .from('profiles')
+                        .update({'last_period_date': newDateStr})
+                        .eq('id', userId);
+                    if (context.mounted) {
+                      ToastHelper.showSuccess(context, 'Siklus berhasil diperbarui (diundur 7 hari) 🌸');
+                    }
+                  } catch (e) {
+                    debugPrint('Failed to delay cycle: $e');
+                  }
+                },
+                icon: const Icon(Icons.history_rounded, size: 16),
+                label: const Text('Belum Haid? (Undur 7 Hari)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.8),
+                  foregroundColor: const Color(0xFF9D178D),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              );
             }
           } else {
             cardTitle = 'Fase Persiapan 🌸';
@@ -365,43 +757,9 @@ class _BerandaPageState extends State<BerandaPage> {
                               height: 1.4,
                             ),
                           ),
-                          if (hasMenstruated == true && lastPeriodDate != null && difference < 0) ...[
+                          if (customButton != null) ...[
                             const SizedBox(height: 12),
-                            ElevatedButton.icon(
-                              onPressed: () async {
-                                try {
-                                  final newDate = lastPeriodDate!.add(const Duration(days: 7));
-                                  final newDateStr = newDate.toIso8601String().split('T')[0];
-                                  final user = Supabase.instance.client.auth.currentUser;
-                                  if (user != null) {
-                                    await Supabase.instance.client
-                                        .from('profiles')
-                                        .update({'last_period_date': newDateStr})
-                                        .eq('id', user.id);
-                                    if (context.mounted) {
-                                      ToastHelper.showSuccess(context, 'Siklus berhasil diperbarui (diundur 7 hari) 🌸');
-                                    }
-                                  }
-                                } catch (e) {
-                                  debugPrint('Failed to delay cycle: $e');
-                                }
-                              },
-                              icon: const Icon(Icons.history_rounded, size: 16),
-                              label: const Text('Belum Haid? (Undur 7 Hari)'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white.withValues(alpha: 0.8),
-                                foregroundColor: const Color(0xFF9D178D),
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                textStyle: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
+                            customButton,
                           ],
                           const SizedBox(height: 12),
                           Row(

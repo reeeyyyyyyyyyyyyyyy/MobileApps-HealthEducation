@@ -17,6 +17,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
   Set<DateTime> _loggedDates = {};
   Set<DateTime> _manualPeriodDates = {};
 
+  bool? _hasMenstruated = true; // default to true to avoid flicker
   DateTime? _lastPeriodDate;
   int _avgPeriodDuration = 5;
   int _avgCycleLength = 28;
@@ -39,12 +40,13 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
     try {
       final response = await _supabase
           .from('profiles')
-          .select('last_period_date, avg_period_duration, avg_cycle_length')
+          .select('last_period_date, avg_period_duration, avg_cycle_length, has_menstruated')
           .eq('id', user.id)
           .maybeSingle();
 
       if (response != null && mounted) {
         setState(() {
+          _hasMenstruated = response['has_menstruated'] as bool?;
           if (response['last_period_date'] != null) {
             _lastPeriodDate = DateTime.tryParse(response['last_period_date'] as String);
           } else {
@@ -97,6 +99,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
   }
 
   bool _isPeriodDay(DateTime date) {
+    if (_hasMenstruated == false) return false;
     final checkDate = DateTime(date.year, date.month, date.day);
     // 1. Manually logged period
     if (_manualPeriodDates.contains(checkDate)) return true;
@@ -114,7 +117,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
   }
 
   bool _isPredictionDay(DateTime date) {
-    if (_lastPeriodDate == null) return false;
+    if (_hasMenstruated == false || _lastPeriodDate == null) return false;
     final checkDate = DateTime(date.year, date.month, date.day);
     if (_isPeriodDay(checkDate)) return false;
 
@@ -130,6 +133,89 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
       }
     }
     return false;
+  }
+
+  void _showFirstHaidDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: const Text(
+            'Selamat Memasuki Fase Baru! 🌸',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Color(0xFF581C87),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.spa_rounded,
+                color: Color(0xFFEC4899),
+                size: 64,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Menstruasi pertama (menarche) adalah tanda sehat bahwa tubuhmu sedang tumbuh dewasa secara alami. Jangan khawatir, BloomFem akan mendampingimu untuk mencatat dan memahami siklus sehatmu!\n\nKami akan mengeset perkiraan awal haid selama 5 hari dengan siklus 28 hari. Kamu bisa menyesuaikannya kapan saja.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF1E293B),
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            Center(
+              child: ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context); // Close dialog
+                  final user = _supabase.auth.currentUser;
+                  if (user == null) return;
+                  try {
+                    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+                    await _supabase
+                        .from('profiles')
+                        .update({
+                          'has_menstruated': true,
+                          'last_period_date': todayStr,
+                          'avg_period_duration': 5,
+                          'avg_cycle_length': 28,
+                        })
+                        .eq('id', user.id);
+                    await _fetchUserProfile();
+                    await _fetchLoggedDates();
+                    if (context.mounted) {
+                      ToastHelper.showSuccess(context, 'Selamat! Pelacakan siklus haid pertamamu telah aktif. 🌸');
+                    }
+                  } catch (e) {
+                    debugPrint('Failed to initialize first period: $e');
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  'Mulai Pelacakan',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showDailyLogBottomSheet() async {
@@ -194,16 +280,15 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                   }
                 }
 
-                if (shouldUpdateProfile) {
+                if (shouldUpdateProfile || _hasMenstruated == false) {
                   await _supabase.from('profiles').update({
+                    'has_menstruated': true,
                     'last_period_date': dateStr,
+                    'avg_period_duration': 5,
+                    'avg_cycle_length': 28,
                   }).eq('id', user.id);
                   await _fetchUserProfile();
                 }
-              } else {
-                // If it was manually checked before but now unchecked, and is the last_period_date,
-                // we might want to revert last_period_date. But for simplicity, we don't force a reset
-                // unless required. Just removing manualPeriodDate handles the calendar rendering override.
               }
               
               await _fetchLoggedDates();
@@ -294,6 +379,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
               ),
               calendarBuilders: CalendarBuilders(
                 prioritizedBuilder: (context, day, focusedDay) {
+                  if (_hasMenstruated == false) return null;
                   final isSelected = isSameDay(_selectedDay, day);
                   final isToday = isSameDay(DateTime.now(), day);
                   final isPeriod = _isPeriodDay(day);
@@ -372,6 +458,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                   return null;
                 },
                 markerBuilder: (context, date, events) {
+                  if (_hasMenstruated == false) return null;
                   final normalizedDate = DateTime(date.year, date.month, date.day);
                   if (_loggedDates.contains(normalizedDate) && !_isPeriodDay(date) && !_isPredictionDay(date)) {
                     return Positioned(
@@ -409,50 +496,91 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.favorite_outline_rounded,
-                    size: 64,
-                    color: _isPeriodDay(selectedDate)
-                        ? const Color(0xFFEC4899)
-                        : const Color(0xFFD946EF),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    isTodaySelected
-                        ? 'Bagaimana kondisimu hari ini?'
-                        : 'Catatan Tanggal ${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF581C87),
+                  if (_hasMenstruated == false) ...[
+                    const Icon(
+                      Icons.spa_rounded,
+                      size: 64,
+                      color: Color(0xFFEC4899),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    isTodaySelected
-                        ? 'Ketuk tombol di bawah untuk mencatat mood dan gejala fisikmu hari ini.'
-                        : 'Ketuk tombol di bawah untuk menambahkan atau mengubah catatan mood dan gejalanya.',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black54,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: _showDailyLogBottomSheet,
-                    icon: const Icon(Icons.edit_note_rounded),
-                    label: Text(isTodaySelected ? 'Catat Mood & Gejala' : 'Ubah Catatan Harian'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF8B5CF6),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Fase Persiapan 🌸',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF581C87),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Kamu berada dalam fase persiapan. Klik tombol di bawah jika kamu mendapatkan haid pertamamu untuk mulai melacak siklus sehatmu!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () => _showFirstHaidDialog(context),
+                      icon: const Icon(Icons.favorite_rounded),
+                      label: const Text('Saya Mendapat Haid Pertama!'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEC4899),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    Icon(
+                      Icons.favorite_outline_rounded,
+                      size: 64,
+                      color: _isPeriodDay(selectedDate)
+                          ? const Color(0xFFEC4899)
+                          : const Color(0xFFD946EF),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      isTodaySelected
+                          ? 'Bagaimana kondisimu hari ini?'
+                          : 'Catatan Tanggal ${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF581C87),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      isTodaySelected
+                          ? 'Ketuk tombol di bawah untuk mencatat mood dan gejala fisikmu hari ini.'
+                          : 'Ketuk tombol di bawah untuk menambahkan atau mengubah catatan mood dan gejalanya.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: _showDailyLogBottomSheet,
+                      icon: const Icon(Icons.edit_note_rounded),
+                      label: Text(isTodaySelected ? 'Catat Mood & Gejala' : 'Ubah Catatan Harian'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF8B5CF6),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
