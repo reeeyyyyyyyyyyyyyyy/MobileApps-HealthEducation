@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
+import '../utils/toast_helper.dart';
 import 'play_kuis_page.dart';
 
 class KuisPage extends StatefulWidget {
@@ -17,72 +19,104 @@ class _KuisPageState extends State<KuisPage> {
   static const Color backgroundColor = Color(0xFFF8FAFC);
   static const Color textPrimary = Color(0xFF1E293B);
   static const Color textSecondary = Color(0xFF64748B);
+  static const Color correctGreen = Color(0xFF10B981);
 
   int _selectedTab = 0;
   final List<String> _tabLabels = ['Pengetahuan', 'Sikap', 'Perilaku'];
 
-  late Future<List<Map<String, dynamic>>> _quizzesFuture;
+  bool _isLoading = true;
+  String? _errorMessage;
 
-  // Data badges
-  final List<_BadgeData> _badges = [
-    _BadgeData(
-      icon: Icons.local_fire_department_rounded,
-      label: '7 Hari Belajar',
-      color: const Color(0xFFF59E0B),
-      bgColor: const Color(0xFFFEF3C7),
-      unlocked: true,
-    ),
-    _BadgeData(
-      icon: Icons.emoji_events_rounded,
-      label: 'Kuis Pemula',
-      color: const Color(0xFF8B5CF6),
-      bgColor: const Color(0xFFEDE9FE),
-      unlocked: true,
-    ),
-    _BadgeData(
-      icon: Icons.explore_rounded,
-      label: 'Penjelajah',
-      color: const Color(0xFF10B981),
-      bgColor: const Color(0xFFD1FAE5),
-      unlocked: true,
-    ),
-    _BadgeData(
-      icon: Icons.auto_awesome_rounded,
-      label: 'Bintang Kelas',
-      color: const Color(0xFFEC4899),
-      bgColor: const Color(0xFFFCE7F3),
-      unlocked: false,
-    ),
-    _BadgeData(
-      icon: Icons.school_rounded,
-      label: 'Ahli Materi',
-      color: const Color(0xFF3B82F6),
-      bgColor: const Color(0xFFDBEAFE),
-      unlocked: false,
-    ),
-  ];
+  List<Map<String, dynamic>> _allQuizzes = [];
+  Set<String> _passedQuizIds = {};
+  Set<String> _readModuleIds = {};
 
   @override
   void initState() {
     super.initState();
-    _loadQuizzes();
+    _loadAllData();
   }
 
-  void _loadQuizzes() {
+  Future<void> _loadAllData() async {
     setState(() {
-      _quizzesFuture = _fetchQuizzes();
+      _isLoading = true;
+      _errorMessage = null;
     });
+
+    try {
+      if (!isSupabaseInitialized) {
+        throw Exception("Supabase belum diinisialisasi.");
+      }
+
+      final user = Supabase.instance.client.auth.currentUser;
+
+      // 1. Fetch all quizzes with module category
+      final quizzesResponse = await Supabase.instance.client
+          .from('quizzes')
+          .select('*, modules (id, category)');
+      _allQuizzes = List<Map<String, dynamic>>.from(quizzesResponse);
+
+      // 2. Fetch passed quiz IDs from user_quizzes
+      if (user != null) {
+        final passedResponse = await Supabase.instance.client
+            .from('user_quizzes')
+            .select('quiz_id')
+            .eq('user_id', user.id)
+            .eq('status', 'passed');
+        _passedQuizIds = Set<String>.from(
+          (passedResponse as List).map((r) => r['quiz_id'] as String),
+        );
+      }
+
+      // 3. Load read modules from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final completedList = prefs.getStringList('completed_modules_list') ?? [];
+      _readModuleIds = Set<String>.from(completedList);
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.toString();
+      });
+    }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchQuizzes() async {
-    if (!isSupabaseInitialized) {
-      throw Exception("Supabase belum diinisialisasi.");
+  // Filter quizzes by category tab
+  List<Map<String, dynamic>> _filterByCategory(List<Map<String, dynamic>> quizzes) {
+    final selectedLabel = _tabLabels[_selectedTab];
+    return quizzes.where((quiz) {
+      final module = quiz['modules'] as Map<String, dynamic>?;
+      final category = (module?['category'] ?? '').toString().toLowerCase();
+      return category.contains(selectedLabel.toLowerCase());
+    }).toList();
+  }
+
+  // Classify quizzes
+  _QuizGroups _classifyQuizzes() {
+    final filtered = _filterByCategory(_allQuizzes);
+
+    final available = <Map<String, dynamic>>[];
+    final locked = <Map<String, dynamic>>[];
+    final completed = <Map<String, dynamic>>[];
+
+    for (final quiz in filtered) {
+      final quizId = quiz['id'] as String? ?? '';
+      final module = quiz['modules'] as Map<String, dynamic>?;
+      final moduleId = module?['id'] as String? ?? '';
+
+      if (_passedQuizIds.contains(quizId)) {
+        completed.add(quiz);
+      } else if (_readModuleIds.contains(moduleId)) {
+        available.add(quiz);
+      } else {
+        locked.add(quiz);
+      }
     }
-    // Join query to fetch module details to get the category
-    final response = await Supabase.instance.client
-        .from('quizzes')
-        .select('*, modules (category)');
-    return List<Map<String, dynamic>>.from(response);
+
+    return _QuizGroups(available: available, locked: locked, completed: completed);
   }
 
   Stream<Map<String, dynamic>> _profileStream() {
@@ -95,57 +129,117 @@ class _KuisPageState extends State<KuisPage> {
         .map((list) => list.isNotEmpty ? list.first : {});
   }
 
-  List<Map<String, dynamic>> _filterQuizzes(List<Map<String, dynamic>> allQuizzes) {
-    final selectedLabel = _tabLabels[_selectedTab];
-    return allQuizzes.where((quiz) {
-      final module = quiz['modules'] as Map<String, dynamic>?;
-      final category = (module?['category'] ?? '').toString().toLowerCase();
-      return category.contains(selectedLabel.toLowerCase());
-    }).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: Container(
         color: backgroundColor,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              _buildHeader(),
-              const SizedBox(height: 16),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: primaryColor))
+            : _errorMessage != null
+                ? _buildError()
+                : _buildContent(),
+      ),
+    );
+  }
 
-              // Filter Tabs
-              _buildFilterTabs(),
-              const SizedBox(height: 20),
-
-              // Banner Ajakan
-              _buildBannerAjakan(),
-              const SizedBox(height: 20),
-
-              // Level Kamu (Real-time Profile Data)
-              _buildSectionTitle('Level Kamu'),
-              const SizedBox(height: 10),
-              _buildLevelCardStream(),
-              const SizedBox(height: 24),
-
-              // Daftar Kuis
-              _buildSectionTitle('Kuis Tersedia'),
-              const SizedBox(height: 10),
-              _buildQuizzesList(),
-              const SizedBox(height: 24),
-
-              // Pencapaian (Badges)
-              _buildSectionTitle('Pencapaian'),
-              const SizedBox(height: 10),
-              _buildBadgesRow(),
-              const SizedBox(height: 16),
-            ],
-          ),
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
+            const SizedBox(height: 12),
+            Text(
+              'Gagal memuat data: $_errorMessage',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: textSecondary),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadAllData,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Coba Lagi'),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    final groups = _classifyQuizzes();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          _buildHeader(),
+          const SizedBox(height: 16),
+
+          // Filter Tabs
+          _buildFilterTabs(),
+          const SizedBox(height: 20),
+
+          // Banner Ajakan
+          _buildBannerAjakan(),
+          const SizedBox(height: 20),
+
+          // Level Kamu (Real-time Profile Data)
+          _buildSectionTitle('Level Kamu'),
+          const SizedBox(height: 10),
+          _buildLevelCardStream(),
+          const SizedBox(height: 24),
+
+          // ── KUIS TERSEDIA ──
+          if (groups.available.isNotEmpty) ...[
+            _buildSectionTitle('Kuis Tersedia'),
+            const SizedBox(height: 10),
+            ...groups.available.map((quiz) => _buildAvailableQuizCard(quiz)),
+            const SizedBox(height: 24),
+          ],
+
+          // ── KUIS TERKUNCI ──
+          if (groups.locked.isNotEmpty) ...[
+            _buildSectionTitle('Kuis Terkunci 🔒'),
+            const SizedBox(height: 10),
+            ...groups.locked.map((quiz) => _buildLockedQuizCard(quiz)),
+            const SizedBox(height: 24),
+          ],
+
+          // ── KUIS SELESAI ──
+          if (groups.completed.isNotEmpty) ...[
+            _buildSectionTitle('Kuis Selesai ✅'),
+            const SizedBox(height: 10),
+            ...groups.completed.map((quiz) => _buildCompletedQuizCard(quiz)),
+            const SizedBox(height: 24),
+          ],
+
+          // Empty state
+          if (groups.available.isEmpty && groups.locked.isEmpty && groups.completed.isEmpty) ...[
+            _buildSectionTitle('Kuis'),
+            const SizedBox(height: 10),
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Text(
+                  'Tidak ada kuis di kategori ini.',
+                  style: TextStyle(color: textSecondary),
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }
@@ -465,276 +559,311 @@ class _KuisPageState extends State<KuisPage> {
   }
 
   // ─────────────────────────────────────────────
-  //  DYNAMIC QUIZZES LIST
+  //  QUIZ CARD: AVAILABLE (Tersedia)
   // ─────────────────────────────────────────────
-  Widget _buildQuizzesList() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _quizzesFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: primaryColor));
-        } else if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                'Gagal memuat kuis: ${snapshot.error}',
-                style: const TextStyle(color: Colors.red),
-              ),
-            ),
-          );
-        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(
-            child: Text(
-              'Belum ada kuis yang tersedia.',
-              style: TextStyle(color: textSecondary),
-            ),
-          );
-        }
+  Widget _buildAvailableQuizCard(Map<String, dynamic> quiz) {
+    final quizId = quiz['id'] ?? '';
+    final title = quiz['title'] ?? 'Kuis';
+    final description = quiz['description'] ?? 'Asah kemampuanmu lewat kuis seru ini!';
+    final xpReward = (quiz['xp_reward'] as num?)?.toInt() ?? 100;
 
-        final filteredQuizzes = _filterQuizzes(snapshot.data!);
-
-        if (filteredQuizzes.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24.0),
-              child: Text(
-                'Tidak ada kuis di kategori ini.',
-                style: TextStyle(color: textSecondary),
-              ),
-            ),
-          );
-        }
-
-        return ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: filteredQuizzes.length,
-          itemBuilder: (context, index) {
-            final quiz = filteredQuizzes[index];
-            final quizId = quiz['id'] ?? '';
-            final title = quiz['title'] ?? 'Kuis';
-            final description = quiz['description'] ?? 'Asah kemampuanmu lewat kuis seru ini!';
-            final xpReward = quiz['xp_reward'] as int? ?? 100;
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () async {
-                    final bool? quizCompleted = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => PlayKuisPage(
-                          quizId: quizId,
-                          quizTitle: title,
-                          xpReward: xpReward,
-                        ),
-                      ),
-                    );
-
-                    if (quizCompleted == true) {
-                      _loadQuizzes();
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(20),
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Ikon Kuis
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEDE9FE),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(
-                                Icons.quiz_rounded,
-                                color: primaryColor,
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-
-                            // Title & XP Reward Badge
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    title,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: textPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  // XP Reward Badge
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFEF3C7),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(
-                                          Icons.bolt_rounded,
-                                          color: Color(0xFFD97706),
-                                          size: 14,
-                                        ),
-                                        const SizedBox(width: 2),
-                                        Text(
-                                          '+$xpReward XP',
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: Color(0xFFB45309),
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        // Deskripsi Kuis
-                        Text(
-                          description,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: textSecondary,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        // Action Footer
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Text(
-                              'Mulai Kuis',
-                              style: TextStyle(
-                                color: primaryColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(
-                              Icons.arrow_forward_rounded,
-                              color: primaryColor,
-                              size: 16,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () async {
+            final bool? quizCompleted = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PlayKuisPage(
+                  quizId: quizId,
+                  quizTitle: title,
+                  xpReward: xpReward,
                 ),
               ),
             );
+
+            if (quizCompleted == true) {
+              _loadAllData(); // Refresh semua data
+            }
           },
-        );
-      },
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Ikon Kuis
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEDE9FE),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.quiz_rounded,
+                        color: primaryColor,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+
+                    // Title & XP Reward Badge
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.bolt_rounded,
+                                  color: Color(0xFFD97706),
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  '+$xpReward XP',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFFB45309),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Deskripsi Kuis
+                Text(
+                  description,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                // Action Footer
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Mulai Kuis',
+                      style: TextStyle(
+                        color: primaryColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.arrow_forward_rounded,
+                      color: primaryColor,
+                      size: 16,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
   // ─────────────────────────────────────────────
-  //  BADGES ROW (horizontal scroll)
+  //  QUIZ CARD: LOCKED (Terkunci)
   // ─────────────────────────────────────────────
-  Widget _buildBadgesRow() {
-    return SizedBox(
-      height: 110,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _badges.length,
-        itemBuilder: (context, index) {
-          final badge = _badges[index];
-          return Container(
-            width: 90,
-            margin: EdgeInsets.only(
-              right: index < _badges.length - 1 ? 12 : 0,
-            ),
-            child: Column(
+  Widget _buildLockedQuizCard(Map<String, dynamic> quiz) {
+    final title = quiz['title'] ?? 'Kuis';
+    final xpReward = (quiz['xp_reward'] as num?)?.toInt() ?? 100;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            ToastHelper.showInfo(
+              context,
+              'Baca modulnya dulu ya! 📖',
+            );
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
               children: [
-                // Ikon bulat
+                // Lock icon
                 Container(
-                  width: 60,
-                  height: 60,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    color: badge.unlocked
-                        ? badge.bgColor
-                        : const Color(0xFFE2E8F0),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: badge.unlocked
-                          ? badge.color.withValues(alpha: 0.3)
-                          : const Color(0xFFCBD5E1),
-                      width: 2.5,
-                    ),
-                    boxShadow: badge.unlocked
-                        ? [
-                            BoxShadow(
-                              color: badge.color.withValues(alpha: 0.2),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ]
-                        : [],
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(
-                    badge.unlocked ? badge.icon : Icons.lock_rounded,
-                    color: badge.unlocked
-                        ? badge.color
-                        : const Color(0xFF94A3B8),
-                    size: 26,
+                  child: const Icon(
+                    Icons.lock_rounded,
+                    color: Color(0xFF94A3B8),
+                    size: 24,
                   ),
                 ),
-                const SizedBox(height: 8),
-
-                // Label
-                Text(
-                  badge.label,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: badge.unlocked ? textPrimary : textSecondary,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '+$xpReward XP • Baca modul untuk membuka',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF94A3B8),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          );
-        },
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  //  QUIZ CARD: COMPLETED (Selesai)
+  // ─────────────────────────────────────────────
+  Widget _buildCompletedQuizCard(Map<String, dynamic> quiz) {
+    final title = quiz['title'] ?? 'Kuis';
+    final xpReward = (quiz['xp_reward'] as num?)?.toInt() ?? 100;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: correctGreen.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          children: [
+            // Check icon
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                color: correctGreen,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '+$xpReward XP diperoleh',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: correctGreen,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Badge Lulus
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'Lulus',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: correctGreen,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -743,18 +872,14 @@ class _KuisPageState extends State<KuisPage> {
 // ─────────────────────────────────────────────
 //  Data class
 // ─────────────────────────────────────────────
-class _BadgeData {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final Color bgColor;
-  final bool unlocked;
+class _QuizGroups {
+  final List<Map<String, dynamic>> available;
+  final List<Map<String, dynamic>> locked;
+  final List<Map<String, dynamic>> completed;
 
-  _BadgeData({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.bgColor,
-    required this.unlocked,
+  _QuizGroups({
+    required this.available,
+    required this.locked,
+    required this.completed,
   });
 }

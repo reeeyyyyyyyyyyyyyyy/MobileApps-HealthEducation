@@ -5,6 +5,7 @@ import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_html/flutter_html.dart';
 import '../utils/toast_helper.dart';
+import 'play_kuis_page.dart';
 
 class DetailModulPage extends StatefulWidget {
   final Map<String, dynamic> module;
@@ -37,6 +38,12 @@ class _DetailModulPageState extends State<DetailModulPage> {
   
   // Status internal untuk mencegah spamming notifikasi
   bool _hasCompletedSessionNotification = false;
+
+  // Data kuis terkait modul ini
+  String? _linkedQuizId;
+  String? _linkedQuizTitle;
+  int _linkedQuizXpReward = 0;
+  bool _isQuizPassed = false;
 
   // Pelacakan Durasi & Posisi Video
   double _videoDurationSeconds = 0.0;
@@ -105,6 +112,7 @@ class _DetailModulPageState extends State<DetailModulPage> {
 
     _checkAlreadyCompleted();
     _incrementViewCount();
+    _fetchLinkedQuiz();
   }
 
   // Increment view_count di Supabase setiap kali modul dibuka
@@ -118,6 +126,44 @@ class _DetailModulPageState extends State<DetailModulPage> {
       );
     } catch (e) {
       debugPrint('Error incrementing view count: $e');
+    }
+  }
+
+  // Ambil kuis yang terkait dengan modul ini
+  Future<void> _fetchLinkedQuiz() async {
+    final moduleId = widget.module['id'] as String?;
+    if (moduleId == null) return;
+    try {
+      final response = await Supabase.instance.client
+          .from('quizzes')
+          .select('id, title, xp_reward')
+          .eq('module_id', moduleId)
+          .maybeSingle();
+      if (response != null && mounted) {
+        final quizId = response['id'] as String;
+        final user = Supabase.instance.client.auth.currentUser;
+        bool isPassed = false;
+
+        if (user != null) {
+          final userQuizResponse = await Supabase.instance.client
+              .from('user_quizzes')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('quiz_id', quizId)
+              .eq('status', 'passed')
+              .maybeSingle();
+          isPassed = userQuizResponse != null;
+        }
+
+        setState(() {
+          _linkedQuizId = quizId;
+          _linkedQuizTitle = response['title'] as String?;
+          _linkedQuizXpReward = (response['xp_reward'] as num?)?.toInt() ?? 0;
+          _isQuizPassed = isPassed;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching linked quiz: $e');
     }
   }
 
@@ -166,8 +212,9 @@ class _DetailModulPageState extends State<DetailModulPage> {
         setState(() {
           _isAlreadyCompleted = true;
           _videoCompleted = true;
-          // Membaca ulang langsung membuka materi dengan progres awal
-          _progressPercentage = _hasVideo ? 50.0 : 0.0;
+          // Langsung tampilkan progress 100% dan banner karena sudah dibaca sebelumnya
+          _progressPercentage = 100.0;
+          _hasCompletedSessionNotification = true;
         });
       }
     } catch (e) {
@@ -193,6 +240,18 @@ class _DetailModulPageState extends State<DetailModulPage> {
   // Listener untuk perubahan posisi scroll
   void _onScroll() {
     if (!_scrollController.hasClients) return;
+
+    // Jika sudah selesai di sesi ini, kunci progres di 100%
+    // agar layout baru (tombol/banner) tidak memicu feedback loop perubahan tinggi scroll
+    if (_hasCompletedSessionNotification) {
+      if (_progressPercentage != 100.0) {
+        setState(() {
+          _progressPercentage = 100.0;
+        });
+      }
+      return;
+    }
+
     final position = _scrollController.position;
     
     double scrollRatio = 0.0;
@@ -223,7 +282,7 @@ class _DetailModulPageState extends State<DetailModulPage> {
     }
   }
 
-  // Logika pemberian reward XP dan pencatatan status penyelesaian
+  // Pencatatan status penyelesaian modul (tanpa XP — XP diberikan via kuis)
   Future<void> _markAsCompleted() async {
     final moduleId = widget.module['id'] as String?;
     if (moduleId == null) return;
@@ -256,7 +315,7 @@ class _DetailModulPageState extends State<DetailModulPage> {
       return;
     }
 
-    // Catat ke SharedPreferences agar tidak mendapat XP berulang kali
+    // Catat ke SharedPreferences (unlock kuis terkait)
     completedList.add(moduleId);
     await prefs.setStringList('completed_modules_list', completedList);
 
@@ -269,36 +328,8 @@ class _DetailModulPageState extends State<DetailModulPage> {
     if (mounted) {
       ToastHelper.showSuccess(
         context,
-        'Hebat! Kamu menyelesaikan modul ini (+50 XP) 🎉',
+        'Modul selesai dibaca! Lanjutkan ke kuis untuk mendapat XP 📚',
       );
-    }
-
-    // Update Supabase profiles: total_xp + 50 dan modul_selesai + 1
-    try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
-
-      // Ambil data profil saat ini
-      final profile = await Supabase.instance.client
-          .from('profiles')
-          .select('total_xp, modul_selesai')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (profile != null) {
-        final currentXp = (profile['total_xp'] as int?) ?? 0;
-        final currentModulSelesai = (profile['modul_selesai'] as int?) ?? 0;
-
-        await Supabase.instance.client
-            .from('profiles')
-            .update({
-              'total_xp': currentXp + 50,
-              'modul_selesai': currentModulSelesai + 1,
-            })
-            .eq('id', user.id);
-      }
-    } catch (e) {
-      debugPrint('Error updating XP: $e');
     }
   }
 
@@ -773,7 +804,7 @@ class _DetailModulPageState extends State<DetailModulPage> {
                           Expanded(
                             child: Text(
                               _justCompletedNow
-                                  ? 'Modul selesai! +50 XP telah ditambahkan. 🎉'
+                                  ? 'Modul selesai dibaca! Lanjutkan ke kuis untuk mendapat XP 🎯'
                                   : 'Kamu telah membaca ulang modul ini hingga akhir! 📚',
                               style: TextStyle(
                                 color: _justCompletedNow
@@ -787,6 +818,46 @@ class _DetailModulPageState extends State<DetailModulPage> {
                         ],
                       ),
                     ),
+
+                  // ── TOMBOL LANJUTKAN KE KUIS ──
+                  if (_linkedQuizId != null && _progressPercentage >= 99.5) ...[
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _isQuizPassed
+                            ? null
+                            : () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => PlayKuisPage(
+                                      quizId: _linkedQuizId!,
+                                      quizTitle: _linkedQuizTitle ?? 'Kuis',
+                                      xpReward: _linkedQuizXpReward,
+                                    ),
+                                  ),
+                                );
+                                _fetchLinkedQuiz();
+                              },
+                        icon: Icon(_isQuizPassed ? Icons.check_circle_outline_rounded : Icons.quiz_rounded),
+                        label: Text(
+                          _isQuizPassed ? 'Kuis Telah Selesai ✅' : 'Lanjutkan ke Kuis',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _isQuizPassed ? const Color(0xFFE2E8F0) : const Color(0xFF8B5CF6),
+                          foregroundColor: _isQuizPassed ? const Color(0xFF94A3B8) : Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: _isQuizPassed ? 0 : 3,
+                          shadowColor: _isQuizPassed ? Colors.transparent : const Color(0xFF8B5CF6).withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 80),
                 ],
               ),

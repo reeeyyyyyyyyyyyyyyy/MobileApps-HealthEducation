@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 import '../utils/toast_helper.dart';
+import '../utils/badge_helper.dart';
 import 'onboarding_page.dart';
 import 'edit_profil_page.dart';
 
@@ -115,6 +116,12 @@ class _ProfilPageState extends State<ProfilPage> {
 
                   // Stats Grid
                   _buildStatsGrid(level, totalXp, modulSelesai),
+                  const SizedBox(height: 24),
+
+                  // Seksi Lencana
+                  _buildSectionTitle('Lencana Saya'),
+                  const SizedBox(height: 12),
+                  _buildBadgesSection(),
                   const SizedBox(height: 24),
 
                   // Menu Pengaturan
@@ -516,6 +523,228 @@ class _ProfilPageState extends State<ProfilPage> {
           }),
         ),
       ),
+    );
+  }
+
+  Widget _buildBadgesSection() {
+    return FutureBuilder<List<String>>(
+      future: BadgeHelper.fetchUserBadges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 100,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const CircularProgressIndicator(color: primaryColor),
+          );
+        }
+        
+        final ownedBadgeIds = snapshot.data ?? [];
+        
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Kumpulkan lencana dengan menyelesaikan berbagai kuis dan modul pembelajaran!',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.8,
+                ),
+                itemCount: BadgeHelper.allBadges.length,
+                itemBuilder: (context, index) {
+                  final badge = BadgeHelper.allBadges[index];
+                  final isOwned = ownedBadgeIds.contains(badge.id);
+                  
+                  return GestureDetector(
+                    onTap: () {
+                      _showBadgeDetailDialog(context, badge, isOwned);
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isOwned ? badge.bgColor : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isOwned ? badge.color.withValues(alpha: 0.3) : const Color(0xFFE2E8F0),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: isOwned ? Colors.white : const Color(0xFFCBD5E1),
+                              shape: BoxShape.circle,
+                              boxShadow: isOwned
+                                  ? [
+                                      BoxShadow(
+                                        color: badge.color.withValues(alpha: 0.2),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Icon(
+                              isOwned ? badge.icon : Icons.lock_outline_rounded,
+                              color: isOwned ? badge.color : const Color(0xFF64748B),
+                              size: 26,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            child: Text(
+                              badge.name,
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isOwned ? textPrimary : const Color(0xFF94A3B8),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            isOwned ? 'Terbuka' : 'Terkunci',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: isOwned ? badge.color : const Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showBadgeDetailDialog(BuildContext context, BadgeDefinition badge, bool isOwned) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: isOwned ? badge.bgColor : const Color(0xFFE2E8F0),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isOwned ? badge.icon : Icons.lock_outline_rounded,
+                    color: isOwned ? badge.color : const Color(0xFF64748B),
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  badge.name,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  badge.description,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isOwned ? const Color(0xFFD1FAE5) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Text(
+                    isOwned ? '✓ Berhasil Didapatkan' : '🔒 Belum Terbuka',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isOwned ? const Color(0xFF065F46) : const Color(0xFF475569),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text(
+                      'Tutup',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
