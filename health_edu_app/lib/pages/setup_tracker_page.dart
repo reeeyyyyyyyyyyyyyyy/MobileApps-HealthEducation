@@ -185,6 +185,107 @@ class _SetupTrackerPageState extends State<SetupTrackerPage> {
         }
       }
 
+      final DateTime? originalResolvedDate = resolvedLastPeriodDate;
+
+      if (_hasMenstruated == true && resolvedLastPeriodDate != null) {
+        final today = DateTime(TimeHelper.nowWIB().year, TimeHelper.nowWIB().month, TimeHelper.nowWIB().day);
+        DateTime nextStart = resolvedLastPeriodDate.add(Duration(days: _avgCycleLength));
+        
+        while (nextStart.add(Duration(days: _avgPeriodDuration)).isBefore(today)) {
+          nextStart = nextStart.add(Duration(days: _avgCycleLength));
+        }
+
+        if (nextStart.isBefore(today) || nextStart.isAtSameMomentAs(today)) {
+          setState(() {
+            _isLoading = false;
+          });
+
+          final nextStartStr = "${nextStart.day}/${nextStart.month}/${nextStart.year}";
+          
+          final bool? hasStartedPeriod = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                title: const Row(
+                  children: [
+                    Icon(Icons.water_drop_rounded, color: Color(0xFFEC4899), size: 28),
+                    SizedBox(width: 8),
+                    Text(
+                      'Prediksi Haid',
+                      style: TextStyle(
+                        color: Color(0xFF581C87),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ],
+                ),
+                content: Text(
+                  'Berdasarkan siklusmu, kamu diperkirakan mulai haid sekitar tanggal $nextStartStr. Apakah kamu sudah mulai mendapat haid untuk siklus ini?',
+                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text(
+                      'Belum / Terlambat',
+                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFEC4899),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Ya, Sudah Mulai',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+
+          if (hasStartedPeriod == true) {
+            if (mounted) {
+              final DateTime? pickedDate = await showDatePicker(
+                context: context,
+                initialDate: today.isBefore(nextStart) ? today : nextStart,
+                firstDate: nextStart.subtract(const Duration(days: 10)),
+                lastDate: today,
+                helpText: 'Pilih Tanggal Mulai Haid Siklus Ini',
+                builder: (context, child) {
+                  return Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: const ColorScheme.light(
+                        primary: Color(0xFFEC4899),
+                        onPrimary: Colors.white,
+                        onSurface: Colors.black87,
+                      ),
+                    ),
+                    child: child!,
+                  );
+                },
+              );
+
+              if (pickedDate != null) {
+                resolvedLastPeriodDate = pickedDate;
+              }
+            }
+          }
+
+          setState(() {
+            _isLoading = true;
+          });
+        }
+      }
+
       final updateData = {
         'has_menstruated': _hasMenstruated,
         'last_period_date': _hasMenstruated == true && resolvedLastPeriodDate != null
@@ -196,12 +297,12 @@ class _SetupTrackerPageState extends State<SetupTrackerPage> {
 
       await _supabase.from('profiles').update(updateData).eq('id', user.id);
 
-      // Seed tanggal haid ke daily_logs agar langsung terdeteksi di kalender
       if (_hasMenstruated == true) {
         final List<Map<String, dynamic>> logsToUpsert = [];
 
-        if (_isFirstTime == true && resolvedLastPeriodDate != null) {
-          final start = DateTime(resolvedLastPeriodDate.year, resolvedLastPeriodDate.month, resolvedLastPeriodDate.day);
+        // Seed original/setup input
+        if (_isFirstTime == true && originalResolvedDate != null) {
+          final start = DateTime(originalResolvedDate.year, originalResolvedDate.month, originalResolvedDate.day);
           for (int i = 0; i < _avgPeriodDuration; i++) {
             final date = start.add(Duration(days: i));
             logsToUpsert.add({
@@ -212,7 +313,6 @@ class _SetupTrackerPageState extends State<SetupTrackerPage> {
             });
           }
         } else if (_isFirstTime == false) {
-          // Haid Terakhir
           if (_lastPeriodStartDate != null && _lastPeriodEndDate != null) {
             final start = DateTime(_lastPeriodStartDate!.year, _lastPeriodStartDate!.month, _lastPeriodStartDate!.day);
             final days = _lastPeriodEndDate!.difference(_lastPeriodStartDate!).inDays + 1;
@@ -226,7 +326,6 @@ class _SetupTrackerPageState extends State<SetupTrackerPage> {
               });
             }
           }
-          // Haid Sebelumnya
           if (_prevPeriodStartDate != null && _prevPeriodEndDate != null) {
             final start = DateTime(_prevPeriodStartDate!.year, _prevPeriodStartDate!.month, _prevPeriodStartDate!.day);
             final days = _prevPeriodEndDate!.difference(_prevPeriodStartDate!).inDays + 1;
@@ -242,8 +341,28 @@ class _SetupTrackerPageState extends State<SetupTrackerPage> {
           }
         }
 
+        // Seed new confirmed period if user started it
+        if (resolvedLastPeriodDate != null && resolvedLastPeriodDate != originalResolvedDate) {
+          final start = DateTime(resolvedLastPeriodDate.year, resolvedLastPeriodDate.month, resolvedLastPeriodDate.day);
+          for (int i = 0; i < _avgPeriodDuration; i++) {
+            final date = start.add(Duration(days: i));
+            logsToUpsert.add({
+              'user_id': user.id,
+              'log_date': date.toIso8601String().split('T')[0],
+              'is_period_day': true,
+              'symptoms': ['Menstruasi (Haid)'],
+            });
+          }
+        }
+
         if (logsToUpsert.isNotEmpty) {
-          await _supabase.from('daily_logs').upsert(logsToUpsert, onConflict: 'user_id,log_date');
+          // Filter duplicates to prevent "ON CONFLICT DO UPDATE command cannot affect row a second time" error
+          final Map<String, Map<String, dynamic>> uniqueLogs = {};
+          for (final log in logsToUpsert) {
+            final dateStr = log['log_date'] as String;
+            uniqueLogs[dateStr] = log;
+          }
+          await _supabase.from('daily_logs').upsert(uniqueLogs.values.toList(), onConflict: 'user_id,log_date');
         }
       }
 

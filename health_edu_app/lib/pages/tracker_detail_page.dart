@@ -39,23 +39,34 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
     final now = TimeHelper.nowWIB();
     _selectedDay = DateTime(now.year, now.month, now.day);
     _focusedDay = DateTime(now.year, now.month, 1);
-    
+
     // Generate months from 12 months ago to 12 months in the future
     _months = List.generate(25, (index) {
       return DateTime(now.year, now.month - 12 + index, 1);
     });
-    
+
     _scrollController = ScrollController();
     _scrollController.addListener(() {
       if (!_isEditing) {
-        // Approximate height of a month card
-        final index = (_scrollController.offset / 380.0).round();
-        if (index >= 0 && index < _months.length) {
-          final month = _months[index];
-          if (_focusedDay.year != month.year || _focusedDay.month != month.month) {
-            // Kita bisa setState di sini kalau butuh _focusedDay untuk efek lain di luar edit mode,
-            // tapi karena ListView.builder render bulan secara independen, kita bisa pakai ini
-            // hanya untuk mendeteksi bulan yang sedang aktif.
+        final offset = _scrollController.offset;
+        final screenWidth = MediaQuery.of(context).size.width;
+        
+        double accumulatedHeight = 0.0;
+        int activeIndex = 0;
+        for (int i = 0; i < _months.length; i++) {
+          final height = _calculateMonthCardHeight(_months[i], screenWidth);
+          if (offset < accumulatedHeight + height / 2.0) {
+            activeIndex = i;
+            break;
+          }
+          accumulatedHeight += height;
+          activeIndex = i;
+        }
+
+        if (activeIndex >= 0 && activeIndex < _months.length) {
+          final month = _months[activeIndex];
+          if (_focusedDay.year != month.year ||
+              _focusedDay.month != month.month) {
             _focusedDay = DateTime(month.year, month.month, 1);
           }
         }
@@ -68,8 +79,12 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        // Start at current month (index 12)
-        _scrollController.jumpTo(12 * 395.0);
+        final screenWidth = MediaQuery.of(context).size.width;
+        double offset = 0.0;
+        for (int i = 0; i < 12; i++) {
+          offset += _calculateMonthCardHeight(_months[i], screenWidth);
+        }
+        _scrollController.jumpTo(offset);
       }
     });
   }
@@ -78,6 +93,21 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  double _calculateMonthCardHeight(DateTime month, double screenWidth) {
+    final firstDayWeekday = DateTime(month.year, month.month, 1).weekday;
+    final totalDays = DateTime(month.year, month.month + 1, 0).day;
+    final offsetCells = firstDayWeekday - 1;
+    final totalCells = offsetCells + totalDays;
+    final rows = (totalCells / 7.0).ceil();
+
+    final cellWidth = (screenWidth - 112) / 7.0;
+    final gridHeight = rows * cellWidth + (rows - 1) * 8.0;
+    
+    // Sum of margins (24), padding (32), title (38), weekdays (14), spacing (12)
+    // Plus a small buffer of 4.0 for platform line height variations
+    return 120.0 + gridHeight + 4.0;
   }
 
   bool _isSameDay(DateTime? a, DateTime? b) {
@@ -92,7 +122,9 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
     try {
       final response = await _supabase
           .from('profiles')
-          .select('last_period_date, avg_period_duration, avg_cycle_length, has_menstruated')
+          .select(
+            'last_period_date, avg_period_duration, avg_cycle_length, has_menstruated',
+          )
           .eq('id', user.id)
           .maybeSingle();
 
@@ -100,7 +132,9 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
         setState(() {
           _hasMenstruated = response['has_menstruated'] as bool?;
           if (response['last_period_date'] != null) {
-            _lastPeriodDate = DateTime.tryParse(response['last_period_date'] as String);
+            _lastPeriodDate = DateTime.tryParse(
+              response['last_period_date'] as String,
+            );
           } else {
             _lastPeriodDate = null;
           }
@@ -126,14 +160,18 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
       final List<dynamic> data = response;
       final Set<DateTime> dates = {};
       final Set<DateTime> manualPeriods = {};
-      
+
       for (var row in data) {
         final dateStr = row['log_date'] as String?;
         if (dateStr != null) {
           final parsedDate = DateTime.parse(dateStr);
-          final normalized = DateTime(parsedDate.year, parsedDate.month, parsedDate.day);
+          final normalized = DateTime(
+            parsedDate.year,
+            parsedDate.month,
+            parsedDate.day,
+          );
           dates.add(normalized);
-          
+
           final isPeriodDay = row['is_period_day'] as bool? ?? false;
           if (isPeriodDay) {
             manualPeriods.add(normalized);
@@ -157,7 +195,9 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
     if (user == null) return;
 
     try {
-      final ninetyDaysAgo = TimeHelper.nowWIB().subtract(const Duration(days: 90));
+      final ninetyDaysAgo = TimeHelper.nowWIB().subtract(
+        const Duration(days: 90),
+      );
       final ninetyDaysAgoStr = ninetyDaysAgo.toIso8601String().split('T')[0];
 
       final response = await _supabase
@@ -198,7 +238,9 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
 
       final lastBlock = blocks.last;
       final resolvedLastPeriodDate = lastBlock.first;
-      final lastPeriodDateStr = resolvedLastPeriodDate.toIso8601String().split('T')[0];
+      final lastPeriodDateStr = resolvedLastPeriodDate.toIso8601String().split(
+        'T',
+      )[0];
 
       double totalDuration = 0;
       for (var block in blocks) {
@@ -222,12 +264,15 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
         }
       }
 
-      await _supabase.from('profiles').update({
-        'has_menstruated': true,
-        'last_period_date': lastPeriodDateStr,
-        'avg_period_duration': avgDuration,
-        'avg_cycle_length': avgCycle,
-      }).eq('id', user.id);
+      await _supabase
+          .from('profiles')
+          .update({
+            'has_menstruated': true,
+            'last_period_date': lastPeriodDateStr,
+            'avg_period_duration': avgDuration,
+            'avg_cycle_length': avgCycle,
+          })
+          .eq('id', user.id);
 
       await _fetchUserProfile();
     } catch (e) {
@@ -240,50 +285,58 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
     final checkDate = DateTime(date.year, date.month, date.day);
 
     if (_isEditing) {
-      if (date.year == _editingMonth?.year && date.month == _editingMonth?.month) {
+      if (date.year == _editingMonth?.year &&
+          date.month == _editingMonth?.month) {
         return _editingPeriodDays.contains(checkDate);
       }
       // For other months in edit mode, fall through to normal period display so they don't disappear!
     }
 
-    if (_manualPeriodDates.contains(checkDate)) return true;
-
-    if (_lastPeriodDate != null) {
-      final start = DateTime(_lastPeriodDate!.year, _lastPeriodDate!.month, _lastPeriodDate!.day);
-      final end = start.add(Duration(days: _avgPeriodDuration - 1));
-      if ((checkDate.isAfter(start) || checkDate.isAtSameMomentAs(start)) &&
-          (checkDate.isBefore(end) || checkDate.isAtSameMomentAs(end))) {
-        return true;
-      }
-    }
-    return false;
+    return _manualPeriodDates.contains(checkDate);
   }
 
   bool _isPredictionDay(DateTime date) {
     if (_hasMenstruated == false || _lastPeriodDate == null) return false;
-    if (_isEditing && date.year == _editingMonth?.year && date.month == _editingMonth?.month) return false;
+    if (_isEditing &&
+        date.year == _editingMonth?.year &&
+        date.month == _editingMonth?.month) {
+      return false;
+    }
     final checkDate = DateTime(date.year, date.month, date.day);
     if (_isPeriodDay(checkDate)) return false;
 
-    DateTime cycleStart = DateTime(_lastPeriodDate!.year, _lastPeriodDate!.month, _lastPeriodDate!.day);
+    DateTime cycleStart = DateTime(
+      _lastPeriodDate!.year,
+      _lastPeriodDate!.month,
+      _lastPeriodDate!.day,
+    );
     int diffDays = checkDate.difference(cycleStart).inDays;
     if (diffDays < 0) return false;
 
     int cyclesPassed = diffDays ~/ _avgCycleLength;
     if (cyclesPassed == 0) return false;
 
-    DateTime predStart = cycleStart.add(Duration(days: cyclesPassed * _avgCycleLength));
+    DateTime predStart = cycleStart.add(
+      Duration(days: cyclesPassed * _avgCycleLength),
+    );
     DateTime predEnd = predStart.add(Duration(days: _avgPeriodDuration - 1));
 
-    if ((checkDate.isAfter(predStart) || checkDate.isAtSameMomentAs(predStart)) &&
+    if ((checkDate.isAfter(predStart) ||
+            checkDate.isAtSameMomentAs(predStart)) &&
         (checkDate.isBefore(predEnd) || checkDate.isAtSameMomentAs(predEnd))) {
       return true;
     }
 
-    DateTime nextPredStart = cycleStart.add(Duration(days: (cyclesPassed + 1) * _avgCycleLength));
-    DateTime nextPredEnd = nextPredStart.add(Duration(days: _avgPeriodDuration - 1));
-    if ((checkDate.isAfter(nextPredStart) || checkDate.isAtSameMomentAs(nextPredStart)) &&
-        (checkDate.isBefore(nextPredEnd) || checkDate.isAtSameMomentAs(nextPredEnd))) {
+    DateTime nextPredStart = cycleStart.add(
+      Duration(days: (cyclesPassed + 1) * _avgCycleLength),
+    );
+    DateTime nextPredEnd = nextPredStart.add(
+      Duration(days: _avgPeriodDuration - 1),
+    );
+    if ((checkDate.isAfter(nextPredStart) ||
+            checkDate.isAtSameMomentAs(nextPredStart)) &&
+        (checkDate.isBefore(nextPredEnd) ||
+            checkDate.isAtSameMomentAs(nextPredEnd))) {
       return true;
     }
 
@@ -292,11 +345,19 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
 
   bool _isFertileDay(DateTime date) {
     if (_hasMenstruated == false || _lastPeriodDate == null) return false;
-    if (_isEditing && date.year == _editingMonth?.year && date.month == _editingMonth?.month) return false;
+    if (_isEditing &&
+        date.year == _editingMonth?.year &&
+        date.month == _editingMonth?.month) {
+      return false;
+    }
     final checkDate = DateTime(date.year, date.month, date.day);
     if (_isPeriodDay(checkDate) || _isPredictionDay(checkDate)) return false;
 
-    DateTime cycleStart = DateTime(_lastPeriodDate!.year, _lastPeriodDate!.month, _lastPeriodDate!.day);
+    DateTime cycleStart = DateTime(
+      _lastPeriodDate!.year,
+      _lastPeriodDate!.month,
+      _lastPeriodDate!.day,
+    );
     int diffDays = checkDate.difference(cycleStart).inDays;
     if (diffDays < 0) return false;
 
@@ -305,21 +366,37 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
     int ovulationOffset = _avgCycleLength - 14;
     if (ovulationOffset < 7) ovulationOffset = 7;
 
-    DateTime currentCycleStart = cycleStart.add(Duration(days: cyclesPassed * _avgCycleLength));
-    DateTime fertileStart = currentCycleStart.add(Duration(days: ovulationOffset - 4));
-    DateTime fertileEnd = currentCycleStart.add(Duration(days: ovulationOffset + 1));
+    DateTime currentCycleStart = cycleStart.add(
+      Duration(days: cyclesPassed * _avgCycleLength),
+    );
+    DateTime fertileStart = currentCycleStart.add(
+      Duration(days: ovulationOffset - 4),
+    );
+    DateTime fertileEnd = currentCycleStart.add(
+      Duration(days: ovulationOffset + 1),
+    );
 
-    if ((checkDate.isAfter(fertileStart) || checkDate.isAtSameMomentAs(fertileStart)) &&
-        (checkDate.isBefore(fertileEnd) || checkDate.isAtSameMomentAs(fertileEnd))) {
+    if ((checkDate.isAfter(fertileStart) ||
+            checkDate.isAtSameMomentAs(fertileStart)) &&
+        (checkDate.isBefore(fertileEnd) ||
+            checkDate.isAtSameMomentAs(fertileEnd))) {
       return true;
     }
 
-    DateTime nextCycleStart = cycleStart.add(Duration(days: (cyclesPassed + 1) * _avgCycleLength));
-    DateTime nextFertileStart = nextCycleStart.add(Duration(days: ovulationOffset - 4));
-    DateTime nextFertileEnd = nextCycleStart.add(Duration(days: ovulationOffset + 1));
+    DateTime nextCycleStart = cycleStart.add(
+      Duration(days: (cyclesPassed + 1) * _avgCycleLength),
+    );
+    DateTime nextFertileStart = nextCycleStart.add(
+      Duration(days: ovulationOffset - 4),
+    );
+    DateTime nextFertileEnd = nextCycleStart.add(
+      Duration(days: ovulationOffset + 1),
+    );
 
-    if ((checkDate.isAfter(nextFertileStart) || checkDate.isAtSameMomentAs(nextFertileStart)) &&
-        (checkDate.isBefore(nextFertileEnd) || checkDate.isAtSameMomentAs(nextFertileEnd))) {
+    if ((checkDate.isAfter(nextFertileStart) ||
+            checkDate.isAtSameMomentAs(nextFertileStart)) &&
+        (checkDate.isBefore(nextFertileEnd) ||
+            checkDate.isAtSameMomentAs(nextFertileEnd))) {
       return true;
     }
 
@@ -328,7 +405,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
 
   void _enterEditMode() {
     _editingMonth = DateTime(_focusedDay.year, _focusedDay.month, 1);
-    
+
     final Set<DateTime> initialSet = {};
     for (final d in _manualPeriodDates) {
       if (d.year == _editingMonth!.year && d.month == _editingMonth!.month) {
@@ -337,7 +414,11 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
     }
 
     if (_lastPeriodDate != null && _hasMenstruated != false) {
-      final start = DateTime(_lastPeriodDate!.year, _lastPeriodDate!.month, _lastPeriodDate!.day);
+      final start = DateTime(
+        _lastPeriodDate!.year,
+        _lastPeriodDate!.month,
+        _lastPeriodDate!.day,
+      );
       for (int i = 0; i < _avgPeriodDuration; i++) {
         final d = start.add(Duration(days: i));
         if (d.year == _editingMonth!.year && d.month == _editingMonth!.month) {
@@ -369,8 +450,9 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
     });
 
     try {
-      final monthToSave = _editingMonth ?? DateTime(_focusedDay.year, _focusedDay.month, 1);
-      
+      final monthToSave =
+          _editingMonth ?? DateTime(_focusedDay.year, _focusedDay.month, 1);
+
       for (final date in _editingPeriodDays) {
         if (date.year == monthToSave.year && date.month == monthToSave.month) {
           final dateStr = date.toIso8601String().split('T')[0];
@@ -385,7 +467,11 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
 
       final existingPeriodDates = Set<DateTime>.from(_manualPeriodDates);
       if (_lastPeriodDate != null) {
-        final start = DateTime(_lastPeriodDate!.year, _lastPeriodDate!.month, _lastPeriodDate!.day);
+        final start = DateTime(
+          _lastPeriodDate!.year,
+          _lastPeriodDate!.month,
+          _lastPeriodDate!.day,
+        );
         for (int i = 0; i < _avgPeriodDuration; i++) {
           existingPeriodDates.add(start.add(Duration(days: i)));
         }
@@ -408,15 +494,22 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
       await _recalculateCycle();
 
       final duration = _editingPeriodDays
-          .where((d) => d.year == monthToSave.year && d.month == monthToSave.month)
+          .where(
+            (d) => d.year == monthToSave.year && d.month == monthToSave.month,
+          )
           .length;
 
       List<String> symptoms = [];
       if (duration > 0) {
-        final sortedDates = _editingPeriodDays
-            .where((d) => d.year == monthToSave.year && d.month == monthToSave.month)
-            .toList()
-          ..sort();
+        final sortedDates =
+            _editingPeriodDays
+                .where(
+                  (d) =>
+                      d.year == monthToSave.year &&
+                      d.month == monthToSave.month,
+                )
+                .toList()
+              ..sort();
         final startStr = sortedDates.first.toIso8601String().split('T')[0];
         final endStr = sortedDates.last.toIso8601String().split('T')[0];
         try {
@@ -479,11 +572,17 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           title: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 28),
+              Icon(
+                Icons.check_circle_rounded,
+                color: Color(0xFF10B981),
+                size: 28,
+              ),
               SizedBox(width: 8),
               Text(
                 'Haid Tersimpan!',
@@ -510,7 +609,11 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.water_drop_rounded, color: Color(0xFFEC4899), size: 32),
+                    const Icon(
+                      Icons.water_drop_rounded,
+                      color: Color(0xFFEC4899),
+                      size: 32,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -552,7 +655,11 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                   children: [
                     const Row(
                       children: [
-                        Icon(Icons.auto_awesome, color: Color(0xFF8B5CF6), size: 18),
+                        Icon(
+                          Icons.auto_awesome,
+                          color: Color(0xFF8B5CF6),
+                          size: 18,
+                        ),
                         SizedBox(width: 6),
                         Text(
                           'Analisis AI BloomFem',
@@ -585,10 +692,18 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF8B5CF6),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
-                child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Tutup',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ],
@@ -597,10 +712,10 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
     );
   }
 
-  void _showFirstHaidDialog(BuildContext context) {
+  void _showFirstHaidDialog(BuildContext outerContext) {
     showDialog(
-      context: context,
-      builder: (context) {
+      context: outerContext,
+      builder: (dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
@@ -616,11 +731,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.spa_rounded,
-                color: Color(0xFFEC4899),
-                size: 64,
-              ),
+              const Icon(Icons.spa_rounded, color: Color(0xFFEC4899), size: 64),
               const SizedBox(height: 16),
               const Text(
                 'Menstruasi pertama (menarche) adalah tanda sehat bahwa tubuhmu sedang tumbuh dewasa secara alami. Jangan khawatir, BloomFem akan mendampingimu untuk mencatat dan memahami siklus sehatmu!\n\nKami akan mengeset perkiraan awal haid selama 5 hari dengan siklus 28 hari. Kamu bisa menyesuaikannya kapan saja.',
@@ -637,11 +748,12 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
             Center(
               child: ElevatedButton(
                 onPressed: () async {
-                  Navigator.pop(context);
+                  Navigator.pop(dialogContext);
                   final user = _supabase.auth.currentUser;
                   if (user == null) return;
                   try {
-                    final todayStr = TimeHelper.nowWIB().toIso8601String().split('T')[0];
+                    final today = TimeHelper.nowWIB();
+                    final todayStr = today.toIso8601String().split('T')[0];
                     await _supabase
                         .from('profiles')
                         .update({
@@ -651,18 +763,31 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                           'avg_cycle_length': 28,
                         })
                         .eq('id', user.id);
-                        
-                    await _supabase.from('daily_logs').upsert({
-                      'user_id': user.id,
-                      'log_date': todayStr,
-                      'is_period_day': true,
-                      'symptoms': ['Menstruasi (Haid)'],
-                    }, onConflict: 'user_id,log_date');
+
+                    // Seed 5 days of period to daily_logs
+                    final List<Map<String, dynamic>> logsToUpsert = [];
+                    final start = DateTime(today.year, today.month, today.day);
+                    for (int i = 0; i < 5; i++) {
+                      final date = start.add(Duration(days: i));
+                      logsToUpsert.add({
+                        'user_id': user.id,
+                        'log_date': date.toIso8601String().split('T')[0],
+                        'is_period_day': true,
+                        'symptoms': ['Menstruasi (Haid)'],
+                      });
+                    }
+
+                    await _supabase
+                        .from('daily_logs')
+                        .upsert(logsToUpsert, onConflict: 'user_id,log_date');
 
                     await _fetchUserProfile();
                     await _fetchLoggedDates();
-                    if (context.mounted) {
-                      ToastHelper.showSuccess(context, 'Selamat! Pelacakan siklus haid pertamamu telah aktif. 🌸');
+                    if (outerContext.mounted) {
+                      ToastHelper.showSuccess(
+                        outerContext,
+                        'Selamat! Pelacakan siklus haid pertamamu telah aktif. 🌸',
+                      );
                     }
                   } catch (e) {
                     debugPrint('Failed to initialize first period: $e');
@@ -671,7 +796,10 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF8B5CF6),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -715,10 +843,11 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
   }
 
   Widget _buildMonthView(DateTime month) {
-    final title = '${['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][month.month - 1]} ${month.year}';
+    final title =
+        '${['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][month.month - 1]} ${month.year}';
     final firstDayWeekday = DateTime(month.year, month.month, 1).weekday;
     final totalDays = DateTime(month.year, month.month + 1, 0).day;
-    final offsetCells = firstDayWeekday - 1; 
+    final offsetCells = firstDayWeekday - 1;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -779,17 +908,18 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
               if (index < offsetCells) {
                 return const SizedBox();
               }
-              
+
               final dayNum = index - offsetCells + 1;
               final day = DateTime(month.year, month.month, dayNum);
               final normalized = DateTime(day.year, day.month, day.day);
-              
+
               final isSelected = !_isEditing && _isSameDay(_selectedDay, day);
               final isToday = _isSameDay(TimeHelper.nowWIB(), day);
               final isPeriod = _isPeriodDay(day);
               final isPrediction = _isPredictionDay(day);
               final isFertile = _isFertileDay(day);
-              final isEditingSelected = _isEditing && _editingPeriodDays.contains(normalized);
+              final isEditingSelected =
+                  _isEditing && _editingPeriodDays.contains(normalized);
 
               BoxDecoration? decoration;
               TextStyle textStyle = const TextStyle(
@@ -812,7 +942,10 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                   decoration = BoxDecoration(
                     color: const Color(0xFFEC4899),
                     shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF8B5CF6), width: 2.5),
+                    border: Border.all(
+                      color: const Color(0xFF8B5CF6),
+                      width: 2.5,
+                    ),
                   );
                 }
               } else if (isPrediction) {
@@ -831,7 +964,10 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                 );
                 if (isSelected) {
                   decoration = decoration.copyWith(
-                    border: Border.all(color: const Color(0xFF8B5CF6), width: 2.5),
+                    border: Border.all(
+                      color: const Color(0xFF8B5CF6),
+                      width: 2.5,
+                    ),
                   );
                 }
               } else if (isFertile) {
@@ -850,7 +986,10 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                 );
                 if (isSelected) {
                   decoration = decoration.copyWith(
-                    border: Border.all(color: const Color(0xFF8B5CF6), width: 2.5),
+                    border: Border.all(
+                      color: const Color(0xFF8B5CF6),
+                      width: 2.5,
+                    ),
                   );
                 }
               } else if (isSelected) {
@@ -878,8 +1017,12 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
               return GestureDetector(
                 onTap: () {
                   if (_isEditing) {
-                    if (day.year != _editingMonth?.year || day.month != _editingMonth?.month) {
-                      ToastHelper.showInfo(context, 'Hanya bisa mengedit tanggal di bulan ${_editingMonth?.month}/${_editingMonth?.year}');
+                    if (day.year != _editingMonth?.year ||
+                        day.month != _editingMonth?.month) {
+                      ToastHelper.showInfo(
+                        context,
+                        'Hanya bisa mengedit tanggal di bulan ${_editingMonth?.month}/${_editingMonth?.year}',
+                      );
                       return;
                     }
                     setState(() {
@@ -901,10 +1044,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      Text(
-                        '$dayNum',
-                        style: textStyle,
-                      ),
+                      Text('$dayNum', style: textStyle),
                       if (!_isEditing &&
                           _loggedDates.contains(normalized) &&
                           !isPeriod &&
@@ -934,12 +1074,12 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
 
   Widget _buildSelectedDayInfo() {
     if (_selectedDay == null) return const SizedBox();
-    
+
     final day = _selectedDay!;
     final isPeriod = _isPeriodDay(day);
     final isPrediction = _isPredictionDay(day);
     final isFertile = _isFertileDay(day);
-    
+
     String title = '';
     String description = '';
     IconData icon = Icons.calendar_today_rounded;
@@ -954,7 +1094,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
       iconColor = const Color(0xFFEC4899);
       bgColor = const Color(0xFFFFF1F2);
       borderColor = const Color(0xFFFECDD3);
-      
+
       int dayNumber = 1;
       DateTime start = DateTime(day.year, day.month, day.day);
       while (_isPeriodDay(start.subtract(const Duration(days: 1)))) {
@@ -962,7 +1102,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
       }
       dayNumber = day.difference(start).inDays + 1;
       title = 'Haid Hari ke-$dayNumber';
-      
+
       final tips = [
         'Istirahat yang cukup dan minum air putih hangat ya! 🍵',
         'Gunakan kompres hangat jika perutmu terasa kram. 🌸',
@@ -970,7 +1110,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
         'Konsumsi makanan kaya zat besi seperti sayuran hijau. 🥦',
         'Lakukan peregangan ringan untuk membantu meredakan nyeri. 🧘‍♀️',
         'Tubuhmu sedang bekerja keras, manjakan dirimu hari ini! 💕',
-        'Haid hampir selesai. Tetap jaga kesehatan ya! 🌟'
+        'Haid hampir selesai. Tetap jaga kesehatan ya! 🌟',
       ];
       description = tips[(dayNumber - 1) % tips.length];
     } else if (isPrediction) {
@@ -979,21 +1119,24 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
       bgColor = const Color(0xFFFDF4FF);
       borderColor = const Color(0xFFFBCFE8);
       title = 'Prediksi Haid';
-      description = 'Diperkirakan haid akan mulai. Siapkan pembalut di tasmu untuk berjaga-jaga! 🎒';
+      description =
+          'Diperkirakan haid akan mulai. Siapkan pembalut di tasmu untuk berjaga-jaga! 🎒';
     } else if (isFertile) {
       icon = Icons.favorite_rounded;
       iconColor = const Color(0xFF8B5CF6);
       bgColor = const Color(0xFFF5F3FF);
       borderColor = const Color(0xFFDDD6FE);
       title = 'Masa Subur';
-      description = 'Peluang kesuburan lebih tinggi. Tubuhmu sedang dalam kondisi prima! ✨';
+      description =
+          'Peluang kesuburan lebih tinggi. Tubuhmu sedang dalam kondisi prima! ✨';
     } else {
       icon = Icons.event_note_rounded;
       iconColor = const Color(0xFF64748B);
       bgColor = const Color(0xFFF8FAFC);
       borderColor = const Color(0xFFE2E8F0);
       title = 'Hari Biasa';
-      description = 'Tidak ada catatan atau prediksi menstruasi pada hari ini. 📅';
+      description =
+          'Tidak ada catatan atau prediksi menstruasi pada hari ini. 📅';
     }
 
     final isToday = _isSameDay(TimeHelper.nowWIB(), day);
@@ -1066,11 +1209,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.spa_rounded,
-            size: 48,
-            color: Color(0xFFEC4899),
-          ),
+          const Icon(Icons.spa_rounded, size: 48, color: Color(0xFFEC4899)),
           const SizedBox(height: 12),
           const Text(
             'Fase Persiapan 🌸',
@@ -1085,10 +1224,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
           const Text(
             'Kamu berada dalam fase persiapan. Klik tombol di bawah jika kamu mendapatkan haid pertamamu untuk mulai melacak siklus sehatmu!',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.black54,
-            ),
+            style: TextStyle(fontSize: 13, color: Colors.black54),
           ),
           const SizedBox(height: 16),
           SizedBox(
@@ -1128,10 +1264,7 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
           const Text(
             'Ketuk tanggal di kalender untuk menambah atau menghapus hari haid pada bulan ini.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.black54,
-            ),
+            style: TextStyle(fontSize: 13, color: Colors.black54),
           ),
           const SizedBox(height: 20),
           Row(
@@ -1148,7 +1281,10 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  child: const Text('Batal', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Batal',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1221,13 +1357,19 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
       appBar: AppBar(
         title: const Text(
           'Kalender Haid',
-          style: TextStyle(color: Color(0xFF581C87), fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Color(0xFF581C87),
+            fontWeight: FontWeight.bold,
+          ),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF581C87)),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Color(0xFF581C87),
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -1239,19 +1381,30 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                 Container(
                   color: Colors.white,
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                   child: Wrap(
                     spacing: 16,
                     runSpacing: 8,
                     alignment: WrapAlignment.center,
                     children: [
                       _buildLegendItem(const Color(0xFFEC4899), 'Haid'),
-                      _buildLegendItem(const Color(0xFFF472B6), 'Prediksi', isOutline: true),
-                      _buildLegendItem(const Color(0xFFA78BFA), 'Masa Subur', isOutline: true),
+                      _buildLegendItem(
+                        const Color(0xFFF472B6),
+                        'Prediksi',
+                        isOutline: true,
+                      ),
+                      _buildLegendItem(
+                        const Color(0xFFA78BFA),
+                        'Masa Subur',
+                        isOutline: true,
+                      ),
                     ],
                   ),
                 ),
-                
+
               Expanded(
                 child: ListView.builder(
                   controller: _scrollController,
@@ -1271,15 +1424,17 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                       color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 20,
                       offset: const Offset(0, -5),
-                    )
+                    ),
                   ],
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(32),
+                  ),
                 ),
                 child: _buildBottomPanel(),
               ),
             ],
           ),
-          
+
           if (_isSaving)
             Container(
               color: Colors.black.withValues(alpha: 0.3),
@@ -1288,7 +1443,9 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5CF6)),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Color(0xFF8B5CF6),
+                      ),
                     ),
                     SizedBox(height: 16),
                     Text(

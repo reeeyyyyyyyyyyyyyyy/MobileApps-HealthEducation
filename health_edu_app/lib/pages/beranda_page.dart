@@ -7,6 +7,7 @@ import '../utils/time_helper.dart';
 
 import 'detail_modul_page.dart';
 import 'tracker_detail_page.dart';
+import 'chat_bot_page.dart';
 
 class BerandaPage extends StatefulWidget {
   const BerandaPage({super.key});
@@ -25,15 +26,39 @@ class _BerandaPageState extends State<BerandaPage> {
 
   late Future<List<Map<String, dynamic>>> _popularModulesFuture;
   String? _confirmedFinishedDate;
+  Map<String, dynamic>? _profileData;
+  bool _isProfileLoading = true;
 
-  Stream<Map<String, dynamic>> _profileStream() {
+  Future<void> _fetchProfile() async {
     final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return const Stream.empty();
-    return Supabase.instance.client
-        .from('profiles')
-        .stream(primaryKey: ['id'])
-        .eq('id', user.id)
-        .map((list) => list.isNotEmpty ? list.first : {});
+    if (user == null) {
+      if (mounted) {
+        setState(() {
+          _isProfileLoading = false;
+        });
+      }
+      return;
+    }
+    try {
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _profileData = response;
+          _isProfileLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching profile: $e');
+      if (mounted) {
+        setState(() {
+          _isProfileLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -41,6 +66,7 @@ class _BerandaPageState extends State<BerandaPage> {
     super.initState();
     _loadConfirmedFinishedDate();
     _loadPopularModules();
+    _fetchProfile();
   }
 
   Future<void> _loadConfirmedFinishedDate() async {
@@ -141,14 +167,15 @@ class _BerandaPageState extends State<BerandaPage> {
   Widget build(BuildContext context) {
     return Container(
       color: backgroundColor,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1) Custom Header
-            _buildHeader(),
-            const SizedBox(height: 20),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1) Custom Header
+              _buildHeader(),
+              const SizedBox(height: 20),
 
             // Smart Tracker Widget
             _buildSmartTrackerWidget(context),
@@ -156,6 +183,10 @@ class _BerandaPageState extends State<BerandaPage> {
 
             // 2) Banner Promosi
             _buildPromoBanner(context),
+            const SizedBox(height: 20),
+
+            // AI Smart Banner
+            _buildSmartAIBanner(context),
             const SizedBox(height: 24),
 
             // 3) Section "Mulai Dari Sini"
@@ -172,6 +203,7 @@ class _BerandaPageState extends State<BerandaPage> {
           ],
         ),
       ),
+     ),
     );
   }
 
@@ -179,135 +211,131 @@ class _BerandaPageState extends State<BerandaPage> {
   //  HEADER: Avatar + Sapaan + Notifikasi
   // ─────────────────────────────────────────────
   Widget _buildHeader() {
-    return StreamBuilder<Map<String, dynamic>>(
-      stream: _profileStream(),
-      builder: (context, snapshot) {
-        final data = snapshot.data ?? {};
-        final fullName = data['full_name'] as String? ?? 'Pengguna';
-        final avatarUrl = data['avatar_url'] as String?;
-        final initial = fullName.trim().isNotEmpty ? fullName.trim()[0].toUpperCase() : 'U';
-        final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
+    final data = _profileData ?? {};
+    final fullName = data['full_name'] as String? ?? 'Pengguna';
+    final avatarUrl = data['avatar_url'] as String?;
+    final initial = fullName.trim().isNotEmpty ? fullName.trim()[0].toUpperCase() : 'U';
+    final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
 
-        return Row(
-          children: [
-            // Avatar
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: secondaryColor, width: 2.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: primaryColor.withValues(alpha: 0.15),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+    return Row(
+      children: [
+        // Avatar
+        Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: secondaryColor, width: 2.5),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withValues(alpha: 0.15),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
               ),
-              child: CircleAvatar(
-                radius: 24,
-                backgroundColor: const Color(0xFFEDE9FE),
-                backgroundImage: hasAvatar ? NetworkImage(avatarUrl) : null,
-                onBackgroundImageError: hasAvatar ? (_, _) {} : null,
-                child: !hasAvatar
-                    ? Text(
-                        initial,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: primaryColor,
-                        ),
-                      )
-                    : null,
-              ),
-            ),
-            const SizedBox(width: 12),
-
-            // Sapaan dua baris
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Halo, Selamat Datang, $fullName!',
+            ],
+          ),
+          child: CircleAvatar(
+            radius: 24,
+            backgroundColor: const Color(0xFFEDE9FE),
+            backgroundImage: hasAvatar ? NetworkImage(avatarUrl) : null,
+            onBackgroundImageError: hasAvatar ? (_, _) {} : null,
+            child: !hasAvatar
+                ? Text(
+                    initial,
                     style: const TextStyle(
-                      fontSize: 18,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: textPrimary,
+                      color: primaryColor,
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Semangat belajar hari ini!',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                  )
+                : null,
+          ),
+        ),
+        const SizedBox(width: 12),
 
-            // Ikon Kalender Siklus
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: IconButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const TrackerDetailPage()),
-                  );
-                },
-                icon: const Icon(
-                  Icons.calendar_month_rounded,
-                  color: Color(0xFFEC4899),
-                  size: 26,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-
-            // Ikon notifikasi
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: IconButton(
-                onPressed: () {},
-                icon: const Icon(
-                  Icons.notifications_none_outlined,
+        // Sapaan dua baris
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Halo, Selamat Datang, $fullName!',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                   color: textPrimary,
-                  size: 26,
                 ),
               ),
+              const SizedBox(height: 2),
+              const Text(
+                'Semangat belajar hari ini!',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Ikon Kalender Siklus
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: IconButton(
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const TrackerDetailPage()),
+              );
+              _fetchProfile();
+            },
+            icon: const Icon(
+              Icons.calendar_month_rounded,
+              color: Color(0xFFEC4899),
+              size: 26,
             ),
-          ],
-        );
-      },
+          ),
+        ),
+        const SizedBox(width: 8),
+
+        // Ikon notifikasi
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: IconButton(
+            onPressed: () {},
+            icon: const Icon(
+              Icons.notifications_none_outlined,
+              color: textPrimary,
+              size: 26,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  void _showFirstHaidDialog(BuildContext context, String userId) {
+  void _showFirstHaidDialog(BuildContext outerContext, String userId) {
     showDialog(
-      context: context,
-      builder: (context) {
+      context: outerContext,
+      builder: (dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
@@ -344,9 +372,10 @@ class _BerandaPageState extends State<BerandaPage> {
             Center(
               child: ElevatedButton(
                 onPressed: () async {
-                  Navigator.pop(context); // Close dialog
+                  Navigator.pop(dialogContext); // Close dialog
                   try {
-                    final todayStr = TimeHelper.nowWIB().toIso8601String().split('T')[0];
+                    final today = TimeHelper.nowWIB();
+                    final todayStr = today.toIso8601String().split('T')[0];
                     await Supabase.instance.client
                         .from('profiles')
                         .update({
@@ -356,9 +385,27 @@ class _BerandaPageState extends State<BerandaPage> {
                           'avg_cycle_length': 28,
                         })
                         .eq('id', userId);
-                    if (context.mounted) {
-                      ToastHelper.showSuccess(context, 'Selamat! Pelacakan siklus haid pertamamu telah aktif. 🌸');
-                      setState(() {});
+
+                    // Seed 5 days of period to daily_logs
+                    final List<Map<String, dynamic>> logsToUpsert = [];
+                    final start = DateTime(today.year, today.month, today.day);
+                    for (int i = 0; i < 5; i++) {
+                      final date = start.add(Duration(days: i));
+                      logsToUpsert.add({
+                        'user_id': userId,
+                        'log_date': date.toIso8601String().split('T')[0],
+                        'is_period_day': true,
+                        'symptoms': ['Menstruasi (Haid)'],
+                      });
+                    }
+
+                    await Supabase.instance.client
+                        .from('daily_logs')
+                        .upsert(logsToUpsert, onConflict: 'user_id,log_date');
+
+                    if (outerContext.mounted) {
+                      ToastHelper.showSuccess(outerContext, 'Selamat! Pelacakan siklus haid pertamamu telah aktif. 🌸');
+                      _fetchProfile();
                     }
                   } catch (e) {
                     debugPrint('Failed to initialize first period: $e');
@@ -385,10 +432,10 @@ class _BerandaPageState extends State<BerandaPage> {
   }
 
 
-  void _showMenorrhagiaDialog(BuildContext context) {
+  void _showMenorrhagiaDialog(BuildContext outerContext) {
     showDialog(
-      context: context,
-      builder: (context) {
+      context: outerContext,
+      builder: (dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: const Row(
@@ -410,7 +457,7 @@ class _BerandaPageState extends State<BerandaPage> {
           actions: [
             Center(
               child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.pop(dialogContext),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF8B5CF6),
                   foregroundColor: Colors.white,
@@ -467,6 +514,7 @@ class _BerandaPageState extends State<BerandaPage> {
 
       if (context.mounted) {
         ToastHelper.showSuccess(context, 'Masa haid berhasil diperpanjang! 🌸');
+        _fetchProfile();
         
         // If duration > 7 days, show Menorrhagia warning dialog
         if (newDuration > 7) {
@@ -478,75 +526,355 @@ class _BerandaPageState extends State<BerandaPage> {
     }
   }
 
+  Future<void> _showStartPeriodConfirmation(BuildContext outerContext, String userId, String todayStr, int avgPeriodDuration) async {
+    final bool? confirm = await showDialog<bool>(
+      context: outerContext,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Row(
+            children: [
+              Icon(Icons.water_drop_rounded, color: Color(0xFFEC4899), size: 28),
+              SizedBox(width: 8),
+              Text(
+                'Konfirmasi Haid',
+                style: TextStyle(
+                  color: Color(0xFF581C87),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Apakah kamu yakin ingin mencatat bahwa menstruasi (haid) kamu dimulai hari ini?',
+            style: TextStyle(fontSize: 14, color: Colors.black87),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEC4899),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Ya, Yakin',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      try {
+        await Supabase.instance.client
+            .from('profiles')
+            .update({'last_period_date': todayStr})
+            .eq('id', userId);
+
+        final today = TimeHelper.nowWIB();
+        final start = DateTime(today.year, today.month, today.day);
+        final List<Map<String, dynamic>> logsToUpsert = [];
+        for (int i = 0; i < avgPeriodDuration; i++) {
+          final date = start.add(Duration(days: i));
+          logsToUpsert.add({
+            'user_id': userId,
+            'log_date': date.toIso8601String().split('T')[0],
+            'is_period_day': true,
+            'symptoms': ['Menstruasi (Haid)'],
+          });
+        }
+
+        await Supabase.instance.client
+            .from('daily_logs')
+            .upsert(logsToUpsert, onConflict: 'user_id,log_date');
+
+        if (outerContext.mounted) {
+          ToastHelper.showSuccess(outerContext, 'Mulai haid berhasil dicatat! 🌸');
+          _fetchProfile();
+        }
+      } catch (e) {
+        debugPrint('Failed to start period early: $e');
+        if (outerContext.mounted) {
+          ToastHelper.showError(outerContext, 'Gagal mencatat haid. Coba lagi ya!');
+        }
+      }
+    }
+  }
+
+  void _showShortPeriodAdviceDialog(BuildContext outerContext, int duration) {
+    showDialog(
+      context: outerContext,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+              SizedBox(width: 8),
+              Text(
+                'Saran Kesehatan',
+                style: TextStyle(
+                  color: Color(0xFF581C87),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Haidmu kali ini berlangsung kurang dari 3 hari ($duration hari). Durasi haid yang singkat bisa dipengaruhi oleh stres, perubahan berat badan, atau hormon.\n\nDisarankan untuk berkonsultasi dengan Asisten Cerdas BloomFem untuk analisis dan penjelasan lebih lanjut.',
+            style: const TextStyle(fontSize: 14, color: Colors.black87),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text(
+                'Tutup',
+                style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext); // Close dialog
+                Navigator.push(
+                  outerContext,
+                  MaterialPageRoute(
+                    builder: (context) => ChatBotPage(
+                      initialMessage: 'Halo BloomFem AI, durasi haidku kali ini sangat singkat, yaitu hanya $duration hari. Apakah hal ini normal untuk remaja perempuan, dan apa saja faktor penyebabnya?',
+                    ),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B5CF6),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Tanya Asisten AI',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildSmartTrackerWidget(BuildContext context) {
-    return StreamBuilder<Map<String, dynamic>>(
-      stream: _profileStream(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox();
+    if (_isProfileLoading) {
+      return const SizedBox(
+        height: 120,
+        child: Center(
+          child: CircularProgressIndicator(color: primaryColor),
+        ),
+      );
+    }
+
+    if (_profileData == null || _profileData!.isEmpty) {
+      return const SizedBox();
+    }
+
+    final data = _profileData!;
+    final String userId = data['id'] as String;
+    final bool? hasMenstruated = data['has_menstruated'] as bool?;
+    
+    if (hasMenstruated == null) {
+      return const SizedBox();
+    }
+
+    String cardTitle = '';
+    String cardSubtitle = '';
+    String buttonText = 'Lihat Detail Kalender';
+    
+    final String? lastPeriodDateStr = data['last_period_date'] as String?;
+    final int avgCycleLength = data['avg_cycle_length'] as int? ?? 28;
+    final int avgPeriodDuration = data['avg_period_duration'] as int? ?? 5;
+    
+    DateTime? lastPeriodDate;
+    int difference = 0;
+    bool isCurrentlyInPeriod = false;
+    int currentPeriodDay = 0;
+    bool isConfirmationDay = false;
+    
+    final today = DateTime(TimeHelper.nowWIB().year, TimeHelper.nowWIB().month, TimeHelper.nowWIB().day);
+    final todayStr = today.toIso8601String().split('T')[0];
+
+    if (lastPeriodDateStr != null) {
+      lastPeriodDate = DateTime.tryParse(lastPeriodDateStr);
+      if (lastPeriodDate != null) {
+        DateTime predictionDate = lastPeriodDate.add(Duration(days: avgCycleLength));
+        
+        // Fast-forward prediction date to the current/next cycle if it's completely in the past
+        while (predictionDate.add(Duration(days: avgPeriodDuration)).isBefore(today)) {
+          predictionDate = predictionDate.add(Duration(days: avgCycleLength));
         }
 
-        final data = snapshot.data!;
-        final String userId = data['id'] as String;
-        final bool? hasMenstruated = data['has_menstruated'] as bool?;
-        
-        if (hasMenstruated == null) {
-          return const SizedBox();
-        }
+        final target = DateTime(predictionDate.year, predictionDate.month, predictionDate.day);
+        difference = target.difference(today).inDays;
 
-        String cardTitle = '';
-        String cardSubtitle = '';
-        String buttonText = 'Lihat Detail Kalender';
-        
-        final String? lastPeriodDateStr = data['last_period_date'] as String?;
-        final int avgCycleLength = data['avg_cycle_length'] as int? ?? 28;
-        final int avgPeriodDuration = data['avg_period_duration'] as int? ?? 5;
-        
-        DateTime? lastPeriodDate;
-        int difference = 0;
-        bool isCurrentlyInPeriod = false;
-        int currentPeriodDay = 0;
-        bool isConfirmationDay = false;
-        
-        final today = DateTime(TimeHelper.nowWIB().year, TimeHelper.nowWIB().month, TimeHelper.nowWIB().day);
-        final todayStr = today.toIso8601String().split('T')[0];
+        final bool isAlreadyConfirmed = _confirmedFinishedDate == todayStr;
 
-        if (lastPeriodDateStr != null) {
-          lastPeriodDate = DateTime.tryParse(lastPeriodDateStr);
-          if (lastPeriodDate != null) {
-            DateTime predictionDate = lastPeriodDate.add(Duration(days: avgCycleLength));
-            
-            // Fast-forward prediction date to the current/next cycle if it's completely in the past
-            while (predictionDate.add(Duration(days: avgPeriodDuration)).isBefore(today)) {
-              predictionDate = predictionDate.add(Duration(days: avgCycleLength));
+        // Check if today falls in the active period
+        currentPeriodDay = today.difference(lastPeriodDate).inDays + 1;
+        isCurrentlyInPeriod = (currentPeriodDay >= 1 && currentPeriodDay <= avgPeriodDuration) && !isAlreadyConfirmed;
+
+        // Check if today is the day after the predicted period (confirmation phase)
+        final predictedEnd = lastPeriodDate.add(Duration(days: avgPeriodDuration));
+        isConfirmationDay = !isAlreadyConfirmed && 
+            (today.isAtSameMomentAs(predictedEnd) || 
+            (today.isAfter(predictedEnd) && today.isBefore(predictedEnd.add(const Duration(days: 2)))));
+      }
+    }
+
+    Widget? customButton;
+
+    if (hasMenstruated == false) {
+      cardTitle = 'Fase Persiapan 🌸';
+      cardSubtitle = 'Yuk catat mood dan gejalamu hari ini untuk mengenali tubuhmu!';
+      customButton = ElevatedButton.icon(
+        onPressed: () => _showFirstHaidDialog(context, userId),
+        icon: const Icon(Icons.favorite_rounded, size: 16),
+        label: const Text('Saya Mendapat Haid Pertama!'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white.withValues(alpha: 0.8),
+          foregroundColor: const Color(0xFFEC4899),
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+        ),
+      );
+    } else if (isCurrentlyInPeriod) {
+      cardTitle = 'Menstruasi: Hari ke-$currentPeriodDay 🌸';
+      cardSubtitle = 'Tetap jaga kebersihan tubuh, minum cukup air, dan istirahat yang cukup ya!';
+      customButton = ElevatedButton.icon(
+        onPressed: () async {
+          final bool? confirm = await showDialog<bool>(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                title: const Row(
+                  children: [
+                    Icon(Icons.check_circle_rounded, color: Color(0xFFEC4899), size: 28),
+                    SizedBox(width: 8),
+                    Text(
+                      'Selesai Haid',
+                      style: TextStyle(
+                        color: Color(0xFF581C87),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ],
+                ),
+                content: const Text(
+                  'Apakah kamu yakin menstruasi (haid) kamu sudah selesai hari ini?',
+                  style: TextStyle(fontSize: 14, color: Colors.black87),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text(
+                      'Batal',
+                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFEC4899),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Ya, Sudah Bersih',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+
+          if (confirm != true) return;
+
+          try {
+            // If duration is >= 3 days, update avg_period_duration. If less, DO NOT update.
+            if (currentPeriodDay >= 3) {
+              await Supabase.instance.client
+                  .from('profiles')
+                  .update({'avg_period_duration': currentPeriodDay})
+                  .eq('id', userId);
             }
 
-            final target = DateTime(predictionDate.year, predictionDate.month, predictionDate.day);
-            difference = target.difference(today).inDays;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('confirmed_finished_date_$userId', todayStr);
 
-            final bool isAlreadyConfirmed = _confirmedFinishedDate == todayStr;
+            if (lastPeriodDate != null) {
+              final endDateForCleanup = lastPeriodDate.add(const Duration(days: 14)).toIso8601String().split('T')[0];
+              await Supabase.instance.client
+                  .from('daily_logs')
+                  .update({
+                    'is_period_day': false,
+                    'symptoms': [],
+                  })
+                  .eq('user_id', userId)
+                  .gt('log_date', todayStr)
+                  .lte('log_date', endDateForCleanup);
+            }
 
-            // Check if today falls in the active period
-            currentPeriodDay = today.difference(lastPeriodDate).inDays + 1;
-            isCurrentlyInPeriod = (currentPeriodDay >= 1 && currentPeriodDay <= avgPeriodDuration) && !isAlreadyConfirmed;
+            setState(() {
+              _confirmedFinishedDate = todayStr;
+            });
 
-            // Check if today is the day after the predicted period (confirmation phase)
-            final predictedEnd = lastPeriodDate.add(Duration(days: avgPeriodDuration));
-            isConfirmationDay = !isAlreadyConfirmed && 
-                (today.isAtSameMomentAs(predictedEnd) || 
-                (today.isAfter(predictedEnd) && today.isBefore(predictedEnd.add(const Duration(days: 2)))));
+            if (context.mounted) {
+              ToastHelper.showSuccess(context, 'Haid telah ditandai selesai! 🌸');
+              _fetchProfile();
+              if (currentPeriodDay < 3) {
+                _showShortPeriodAdviceDialog(context, currentPeriodDay);
+              }
+            }
+          } catch (e) {
+            debugPrint('Failed to update period duration: $e');
           }
-        }
-
-        Widget? customButton;
-
-        if (hasMenstruated == false) {
-          cardTitle = 'Fase Persiapan 🌸';
-          cardSubtitle = 'Yuk catat mood dan gejalamu hari ini untuk mengenali tubuhmu!';
-          customButton = ElevatedButton.icon(
-            onPressed: () => _showFirstHaidDialog(context, userId),
+        },
+        icon: const Icon(Icons.clean_hands_rounded, size: 16),
+        label: const Text('Sudah Bersih? (Akhiri Sekarang)'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white.withValues(alpha: 0.8),
+          foregroundColor: const Color(0xFFEC4899),
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+        ),
+      );
+    } else if (isConfirmationDay) {
+      cardTitle = 'Konfirmasi Selesai Haid? 🌸';
+      cardSubtitle = 'Berdasarkan prediksimu, haidmu seharusnya sudah selesai. Apakah haidmu masih berlangsung hari ini?';
+      customButton = Row(
+        children: [
+          ElevatedButton.icon(
+            onPressed: () => _handleExtendPeriod(context, userId, avgPeriodDuration + 1, today),
             icon: const Icon(Icons.favorite_rounded, size: 16),
-            label: const Text('Saya Mendapat Haid Pertama!'),
+            label: const Text('Masih Haid'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white.withValues(alpha: 0.8),
               foregroundColor: const Color(0xFFEC4899),
@@ -555,48 +883,65 @@ class _BerandaPageState extends State<BerandaPage> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             ),
-          );
-        } else if (isCurrentlyInPeriod) {
-          cardTitle = 'Menstruasi: Hari ke-$currentPeriodDay 🌸';
-          cardSubtitle = 'Tetap jaga kebersihan tubuh, minum cukup air, dan istirahat yang cukup ya!';
-          customButton = ElevatedButton.icon(
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
             onPressed: () async {
-              final actualDuration = currentPeriodDay < 3 ? 3 : currentPeriodDay;
               try {
-                await Supabase.instance.client
-                    .from('profiles')
-                    .update({'avg_period_duration': actualDuration})
-                    .eq('id', userId);
-
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.setString('confirmed_finished_date_$userId', todayStr);
-
-                if (lastPeriodDate != null) {
-                  final endDateForCleanup = lastPeriodDate.add(const Duration(days: 14)).toIso8601String().split('T')[0];
-                  await Supabase.instance.client
-                      .from('daily_logs')
-                      .update({
-                        'is_period_day': false,
-                        'symptoms': [],
-                      })
-                      .eq('user_id', userId)
-                      .gt('log_date', todayStr)
-                      .lte('log_date', endDateForCleanup);
-                }
-
                 setState(() {
                   _confirmedFinishedDate = todayStr;
                 });
-
                 if (context.mounted) {
                   ToastHelper.showSuccess(context, 'Haid telah ditandai selesai! 🌸');
+                  _fetchProfile();
                 }
               } catch (e) {
-                debugPrint('Failed to update period duration: $e');
+                debugPrint('Failed to save confirmation: $e');
               }
             },
-            icon: const Icon(Icons.clean_hands_rounded, size: 16),
-            label: const Text('Sudah Bersih? (Akhiri Sekarang)'),
+            icon: const Icon(Icons.check_circle_rounded, size: 16),
+            label: const Text('Sudah Selesai'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.8),
+              foregroundColor: const Color(0xFF10B981),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      );
+    } else {
+      // Prediction/Late States
+      if (lastPeriodDateStr != null) {
+        if (difference > 0) {
+          cardTitle = 'Prediksi Haid: H-$difference ⏳';
+          cardSubtitle = 'Haid berikutnya diperkirakan akan mulai dalam $difference hari.';
+          if (difference <= 7) {
+            customButton = ElevatedButton.icon(
+              onPressed: () => _showStartPeriodConfirmation(context, userId, todayStr, avgPeriodDuration),
+              icon: const Icon(Icons.water_drop_rounded, size: 16),
+              label: const Text('Mulai Haid Hari Ini?'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white.withValues(alpha: 0.8),
+                foregroundColor: const Color(0xFFEC4899),
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            );
+          }
+        } else if (difference == 0) {
+          cardTitle = 'Prediksi Haid: Hari Ini! 🌸';
+          cardSubtitle = 'Haid diprediksi mulai hari ini. Bersiaplah dan tetap tenang!';
+          customButton = ElevatedButton.icon(
+            onPressed: () => _showStartPeriodConfirmation(context, userId, todayStr, avgPeriodDuration),
+            icon: const Icon(Icons.water_drop_rounded, size: 16),
+            label: const Text('Sudah Mulai Haid?'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white.withValues(alpha: 0.8),
               foregroundColor: const Color(0xFFEC4899),
@@ -606,301 +951,126 @@ class _BerandaPageState extends State<BerandaPage> {
               textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             ),
           );
-        } else if (isConfirmationDay) {
-          cardTitle = 'Konfirmasi Selesai Haid? 🌸';
-          cardSubtitle = 'Berdasarkan prediksimu, haidmu seharusnya sudah selesai. Apakah haidmu masih berlangsung hari ini?';
-          customButton = Row(
-            children: [
-              ElevatedButton.icon(
-                onPressed: () => _handleExtendPeriod(context, userId, avgPeriodDuration + 1, today),
-                icon: const Icon(Icons.favorite_rounded, size: 16),
-                label: const Text('Masih Haid'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.8),
-                  foregroundColor: const Color(0xFFEC4899),
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  try {
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setString('confirmed_finished_date_$userId', todayStr);
-                    setState(() {
-                      _confirmedFinishedDate = todayStr;
-                    });
-                    if (context.mounted) {
-                      ToastHelper.showSuccess(context, 'Haid telah ditandai selesai! 🌸');
-                    }
-                  } catch (e) {
-                    debugPrint('Failed to save confirmation: $e');
-                  }
-                },
-                icon: const Icon(Icons.check_circle_rounded, size: 16),
-                label: const Text('Sudah Selesai'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.8),
-                  foregroundColor: const Color(0xFF10B981),
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          );
         } else {
-          // Prediction/Late States
-          if (lastPeriodDateStr != null) {
-            if (difference > 0) {
-              cardTitle = 'Prediksi Haid: H-$difference ⏳';
-              cardSubtitle = 'Haid berikutnya diperkirakan akan mulai dalam $difference hari.';
-              customButton = ElevatedButton.icon(
-                onPressed: () async {
-                  try {
-                    await Supabase.instance.client
-                        .from('profiles')
-                        .update({'last_period_date': todayStr})
-                        .eq('id', userId);
-                    await Supabase.instance.client.from('daily_logs').upsert({
-                      'user_id': userId,
-                      'log_date': todayStr,
-                      'is_period_day': true,
-                      'symptoms': ['Menstruasi (Haid)'],
-                    }, onConflict: 'user_id,log_date');
-                    if (context.mounted) {
-                      ToastHelper.showSuccess(context, 'Mulai haid berhasil dicatat! 🌸');
-                      setState(() {});
-                    }
-                  } catch (e) {
-                    debugPrint('Failed to start period early: $e');
-                  }
-                },
-                icon: const Icon(Icons.water_drop_rounded, size: 16),
-                label: const Text('Mulai Haid Hari Ini?'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.8),
-                  foregroundColor: const Color(0xFFEC4899),
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              );
-            } else if (difference == 0) {
-              cardTitle = 'Prediksi Haid: Hari Ini! 🌸';
-              cardSubtitle = 'Haid diprediksi mulai hari ini. Bersiaplah dan tetap tenang!';
-              customButton = ElevatedButton.icon(
-                onPressed: () async {
-                  try {
-                    await Supabase.instance.client
-                        .from('profiles')
-                        .update({'last_period_date': todayStr})
-                        .eq('id', userId);
-                    await Supabase.instance.client.from('daily_logs').upsert({
-                      'user_id': userId,
-                      'log_date': todayStr,
-                      'is_period_day': true,
-                      'symptoms': ['Menstruasi (Haid)'],
-                    }, onConflict: 'user_id,log_date');
-                    if (context.mounted) {
-                      ToastHelper.showSuccess(context, 'Mulai haid berhasil dicatat! 🌸');
-                      setState(() {});
-                    }
-                  } catch (e) {
-                    debugPrint('Failed to start period early: $e');
-                  }
-                },
-                icon: const Icon(Icons.water_drop_rounded, size: 16),
-                label: const Text('Sudah Mulai Haid?'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.8),
-                  foregroundColor: const Color(0xFFEC4899),
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              );
-            } else {
-              final lateDays = difference.abs();
-              cardTitle = 'Terlambat $lateDays Hari ⚠️';
-              cardSubtitle = 'Haid terlambat $lateDays hari. Jangan panik, tetap tenang!';
-              customButton = SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        try {
-                          await Supabase.instance.client
-                              .from('profiles')
-                              .update({'last_period_date': todayStr})
-                              .eq('id', userId);
-                          await Supabase.instance.client.from('daily_logs').upsert({
-                            'user_id': userId,
-                            'log_date': todayStr,
-                            'is_period_day': true,
-                            'symptoms': ['Menstruasi (Haid)'],
-                          }, onConflict: 'user_id,log_date');
-                          if (context.mounted) {
-                            ToastHelper.showSuccess(context, 'Mulai haid berhasil dicatat! 🌸');
-                          }
-                        } catch (e) {
-                          debugPrint('Failed to start period early: $e');
-                        }
-                      },
-                      icon: const Icon(Icons.water_drop_rounded, size: 16),
-                      label: const Text('Sudah Haid Hari Ini?'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withValues(alpha: 0.8),
-                        foregroundColor: const Color(0xFFEC4899),
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        try {
-                          final newDate = lastPeriodDate!.add(const Duration(days: 7));
-                          final newDateStr = newDate.toIso8601String().split('T')[0];
-                          await Supabase.instance.client
-                              .from('profiles')
-                              .update({'last_period_date': newDateStr})
-                              .eq('id', userId);
-                          if (context.mounted) {
-                            ToastHelper.showSuccess(context, 'Siklus berhasil diperbarui (diundur 7 hari) 🌸');
-                            setState(() {});
-                          }
-                        } catch (e) {
-                          debugPrint('Failed to delay cycle: $e');
-                        }
-                      },
-                      icon: const Icon(Icons.history_rounded, size: 16),
-                      label: const Text('Belum Haid (Undur 7 Hari)'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withValues(alpha: 0.8),
-                        foregroundColor: const Color(0xFF9D178D),
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-          } else {
-            cardTitle = 'Fase Persiapan 🌸';
-            cardSubtitle = 'Yuk catat mood dan gejalamu hari ini untuk mengenali tubuhmu!';
-          }
-        }
-
-        return Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFBCFE8), Color(0xFFE9D5FF)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+          final lateDays = difference.abs();
+          cardTitle = 'Terlambat $lateDays Hari ⚠️';
+          cardSubtitle = 'Haid terlambat $lateDays hari. Jangan panik, tetap tenang!';
+          customButton = ElevatedButton.icon(
+            onPressed: () => _showStartPeriodConfirmation(context, userId, todayStr, avgPeriodDuration),
+            icon: const Icon(Icons.water_drop_rounded, size: 16),
+            label: const Text('Sudah Haid Hari Ini?'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.8),
+              foregroundColor: const Color(0xFFEC4899),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             ),
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFEC4899).withValues(alpha: 0.15),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
+          );
+        }
+      } else {
+        cardTitle = 'Fase Persiapan 🌸';
+        cardSubtitle = 'Yuk catat mood dan gejalamu hari ini untuk mengenali tubuhmu!';
+      }
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFBCFE8), Color(0xFFE9D5FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFEC4899).withValues(alpha: 0.15),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const TrackerDetailPage()),
-                );
-              },
-              borderRadius: BorderRadius.circular(24),
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const TrackerDetailPage()),
+            );
+            _fetchProfile();
+          },
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        cardTitle,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF581C87),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        cardSubtitle,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF6B21A8),
+                          height: 1.4,
+                        ),
+                      ),
+                      if (customButton != null) ...[
+                        const SizedBox(height: 12),
+                        customButton,
+                      ],
+                      const SizedBox(height: 12),
+                      Row(
                         children: [
                           Text(
-                            cardTitle,
+                            buttonText,
                             style: const TextStyle(
-                              fontSize: 18,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF581C87),
+                              color: Color(0xFF9D178D),
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            cardSubtitle,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Color(0xFF6B21A8),
-                              height: 1.4,
-                            ),
-                          ),
-                          if (customButton != null) ...[
-                            const SizedBox(height: 12),
-                            customButton,
-                          ],
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Text(
-                                buttonText,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF9D178D),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(
-                                Icons.arrow_forward_rounded,
-                                size: 14,
-                                color: Color(0xFF9D178D),
-                              ),
-                            ],
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 14,
+                            color: Color(0xFF9D178D),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.track_changes_rounded,
-                        color: Color(0xFFD946EF),
-                        size: 32,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.track_changes_rounded,
+                    color: Color(0xFFD946EF),
+                    size: 32,
+                  ),
+                ),
+              ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -1021,6 +1191,76 @@ class _BerandaPageState extends State<BerandaPage> {
         fontSize: 20,
         fontWeight: FontWeight.bold,
         color: textPrimary,
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  //  SMART AI BANNER
+  // ─────────────────────────────────────────────
+  Widget _buildSmartAIBanner(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const ChatBotPage()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF8B5CF6), Color(0xFFD946EF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFD946EF).withValues(alpha: 0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.smart_toy_rounded, color: Color(0xFF8B5CF6), size: 28),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Asisten Cerdas BloomFem',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Punya pertanyaan privasi? Tanya dan curhat aman di sini!',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
+          ],
+        ),
       ),
     );
   }
