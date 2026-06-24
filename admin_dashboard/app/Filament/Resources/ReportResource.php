@@ -107,6 +107,10 @@ class ReportResource extends Resource
                             ->send();
                     }),
             ])
+            ->headerActions([
+                Tables\Actions\ExportAction::make()
+                    ->exporter(\App\Filament\Exports\ReportExporter::class),
+            ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),

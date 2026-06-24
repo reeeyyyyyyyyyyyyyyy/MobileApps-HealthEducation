@@ -44,6 +44,9 @@ class AdminPanelProvider extends PanelProvider
             ->widgets([
                 Widgets\AccountWidget::class,
                 Widgets\FilamentInfoWidget::class,
+                \App\Filament\Widgets\StatsOverview::class,
+                \App\Filament\Widgets\PopularModulesChart::class,
+                \App\Filament\Widgets\QuizPassRatioChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,

@@ -1525,12 +1525,16 @@ class _BerandaPageState extends State<BerandaPage> {
                           ),
                           child: Row(
                             children: [
-                              Text(
-                                '$duration • Artikel',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: themeColors['color'],
+                              Expanded(
+                                child: Text(
+                                  '$duration • Artikel',
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: themeColors['color'],
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 6),

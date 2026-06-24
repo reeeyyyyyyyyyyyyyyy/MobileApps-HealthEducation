@@ -39,4 +39,9 @@ class User extends Model
     {
         return $this->hasMany(Report::class, 'reporter_id');
     }
+
+    public function userQuizzes()
+    {
+        return $this->hasMany(UserQuiz::class, 'user_id');
+    }
 }
