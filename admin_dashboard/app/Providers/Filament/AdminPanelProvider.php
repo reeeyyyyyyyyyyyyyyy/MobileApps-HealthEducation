@@ -25,7 +25,7 @@ class AdminPanelProvider extends PanelProvider
         return $panel
             ->default()
             ->id('admin')
-            ->path('admin')
+            ->path('filament-old')
             ->login()
             ->colors([
                 'primary' => Color::Hex('#8B5CF6'),
