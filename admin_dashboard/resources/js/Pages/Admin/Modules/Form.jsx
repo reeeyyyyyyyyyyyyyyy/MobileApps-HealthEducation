@@ -3,6 +3,8 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { ArrowLeft, Save } from 'lucide-react';
 
+import { gooeyToast } from 'goey-toast';
+
 export default function Form({ module, categories, icons }) {
     const isEdit = !!module;
 
@@ -14,6 +16,17 @@ export default function Form({ module, categories, icons }) {
         video_url: module?.video_url || '',
         content: module?.content || '',
     });
+
+    React.useEffect(() => {
+        const errorKeys = Object.keys(errors);
+        if (errorKeys.length > 0) {
+            gooeyToast.error('Gagal menyimpan modul!', {
+                description: errors[errorKeys[0]],
+                preset: 'bouncy',
+                duration: 5000
+            });
+        }
+    }, [errors]);
 
     const handleSubmit = (e) => {
         e.preventDefault();

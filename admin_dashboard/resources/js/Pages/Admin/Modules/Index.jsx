@@ -3,6 +3,8 @@ import { Head, Link, router } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Search, Plus, Edit2, Trash2, Eye, ExternalLink } from 'lucide-react';
 
+import { gooeyToast } from 'goey-toast';
+
 export default function Index({ modules, filters }) {
     const [search, setSearch] = React.useState(filters.search || '');
     const [category, setCategory] = React.useState(filters.category || '');
@@ -24,9 +26,18 @@ export default function Index({ modules, filters }) {
     }, [search, category]);
 
     const handleDelete = (id, title) => {
-        if (confirm(`Apakah Anda yakin ingin menghapus modul "${title}"? Tindakan ini tidak dapat dibatalkan.`)) {
-            router.delete(`/admin/modules/${id}`);
-        }
+        gooeyToast.warning('Hapus Modul?', {
+            description: `Modul "${title}" akan dihapus permanen.`,
+            preset: 'bouncy',
+            duration: 6000,
+            action: {
+                label: 'Ya, Hapus',
+                onClick: () => {
+                    router.delete(`/admin/modules/${id}`);
+                },
+                successLabel: 'Terhapus'
+            }
+        });
     };
 
     const getCategoryBadgeClass = (cat) => {

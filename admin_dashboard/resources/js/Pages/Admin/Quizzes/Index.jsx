@@ -3,6 +3,8 @@ import { Head, Link, router } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Search, Plus, Edit2, Trash2, Award, ClipboardList } from 'lucide-react';
 
+import { gooeyToast } from 'goey-toast';
+
 export default function Index({ quizzes, modules, filters }) {
     const [search, setSearch] = React.useState(filters.search || '');
     const [moduleId, setModuleId] = React.useState(filters.module_id || '');
@@ -23,9 +25,18 @@ export default function Index({ quizzes, modules, filters }) {
     }, [search, moduleId]);
 
     const handleDelete = (id, title) => {
-        if (confirm(`Apakah Anda yakin ingin menghapus kuis "${title}" beserta seluruh soalnya? Tindakan ini tidak dapat dibatalkan.`)) {
-            router.delete(`/admin/quizzes/${id}`);
-        }
+        gooeyToast.warning('Hapus Kuis?', {
+            description: `Kuis "${title}" beserta semua soalnya akan dihapus.`,
+            preset: 'bouncy',
+            duration: 6000,
+            action: {
+                label: 'Ya, Hapus',
+                onClick: () => {
+                    router.delete(`/admin/quizzes/${id}`);
+                },
+                successLabel: 'Terhapus'
+            }
+        });
     };
 
     return (

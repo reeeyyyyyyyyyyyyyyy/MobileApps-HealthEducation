@@ -3,6 +3,8 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { ArrowLeft, Save, Plus, Trash2, HelpCircle, AlertCircle } from 'lucide-react';
 
+import { gooeyToast } from 'goey-toast';
+
 export default function Form({ quiz, modules }) {
     const isEdit = !!quiz;
 
@@ -21,8 +23,29 @@ export default function Form({ quiz, modules }) {
         })) : []
     });
 
+    React.useEffect(() => {
+        const errorKeys = Object.keys(errors);
+        if (errorKeys.length > 0) {
+            gooeyToast.error('Gagal menyimpan kuis!', {
+                description: errors[errorKeys[0]],
+                preset: 'bouncy',
+                duration: 5000
+            });
+        }
+    }, [errors]);
+
     const handleSubmit = (e) => {
         e.preventDefault();
+        
+        if (data.questions.length === 0) {
+            gooeyToast.warning('Pertanyaan Kosong', {
+                description: 'Tambahkan minimal 1 pertanyaan sebelum menyimpan kuis.',
+                preset: 'bouncy',
+                duration: 4000
+            });
+            return;
+        }
+
         if (isEdit) {
             put(`/admin/quizzes/${quiz.id}`);
         } else {

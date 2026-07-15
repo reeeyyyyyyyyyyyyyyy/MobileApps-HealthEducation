@@ -3,13 +3,24 @@ import { Head, Link, router } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Download, AlertTriangle, Trash2, Eye, ShieldCheck } from 'lucide-react';
 
+import { gooeyToast } from 'goey-toast';
+
 export default function Index({ reports }) {
     const [selectedReport, setSelectedReport] = React.useState(null);
 
     const handleDeleteContent = (reportId, reporterName) => {
-        if (confirm(`Apakah Anda yakin ingin menghapus konten forum yang dilaporkan oleh "${reporterName}"? Tindakan ini akan menghapus postingan atau komentar tersebut secara permanen.`)) {
-            router.post(`/admin/reports/${reportId}/delete-content`);
-        }
+        gooeyToast.warning('Hapus Konten Forum?', {
+            description: `Konten yang dilaporkan oleh "${reporterName}" akan dihapus permanen.`,
+            preset: 'bouncy',
+            duration: 6000,
+            action: {
+                label: 'Ya, Hapus',
+                onClick: () => {
+                    router.post(`/admin/reports/${reportId}/delete-content`);
+                },
+                successLabel: 'Terhapus'
+            }
+        });
     };
 
     return (

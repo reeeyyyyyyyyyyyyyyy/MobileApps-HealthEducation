@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
+import { useToast } from '@/hooks/useToast';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { 
     Users, 

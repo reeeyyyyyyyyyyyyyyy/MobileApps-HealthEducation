@@ -39,9 +39,7 @@ class ReportController extends Controller
                 Comment::where('id', $report->comment_id)->delete();
             }
             
-            // Delete the report itself or keep it? Filament action deletes the content but keeps the report or deletes both?
-            // In the original Filament action (ReportResource.php lines 91-108), it deletes the post or comment, but does not delete the report.
-            // Let's delete the content. Since cascade deletion is not defined, we keep the report but the post/comment is deleted.
+            // Delete the content (post or comment). Report record stays for audit trail.
         });
 
         return redirect()->route('admin.reports.index')->with('success', 'Konten yang dilaporkan berhasil dihapus dari forum!');

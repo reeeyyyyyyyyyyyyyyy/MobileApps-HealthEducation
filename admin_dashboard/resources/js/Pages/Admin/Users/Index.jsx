@@ -1,5 +1,6 @@
-import React from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import React, { useEffect } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { useToast } from '@/hooks/useToast';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Search, Download, Award, BookOpen, ClipboardList, Shield } from 'lucide-react';
 
