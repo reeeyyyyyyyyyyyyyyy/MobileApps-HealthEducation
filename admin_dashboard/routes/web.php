@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\ModuleController;
 use App\Http\Controllers\Admin\QuizController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\UploadController;
 use Inertia\Inertia;
 
 // Welcome Page
@@ -54,4 +55,8 @@ Route::prefix('admin')->middleware('auth')->group(function () {
     // Users Progress
     Route::get('users', [UserController::class, 'index'])->name('admin.users.index');
     Route::get('users/export', [UserController::class, 'export'])->name('admin.users.export');
+
+    // Upload & Parse
+    Route::post('upload/parse', [UploadController::class, 'parse'])->name('admin.upload.parse');
+    Route::post('upload/store-questions', [UploadController::class, 'storeQuestions'])->name('admin.upload.store-questions');
 });

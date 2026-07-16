@@ -36,17 +36,6 @@ class ModuleController extends Controller
         return Inertia::render('Admin/Modules/Form', [
             'module' => null,
             'categories' => ['Pengetahuan', 'Sikap Positif', 'Perilaku Sehat'],
-            'icons' => [
-                'psychology_rounded' => 'Psychology (Mitos/Fakta)',
-                'volunteer_activism_rounded' => 'Volunteer Activism (Kelola Nyeri)',
-                'favorite_rounded' => 'Favorite (Bangga Tubuhmu)',
-                'healing_rounded' => 'Healing (Kesehatan)',
-                'clean_hands_rounded' => 'Clean Hands (Kebersihan)',
-                'restaurant_rounded' => 'Restaurant (Nutrisi)',
-                'checkroom_rounded' => 'Checkroom (Pembalut)',
-                'self_improvement_rounded' => 'Self Improvement (PMS)',
-                'water_drop_rounded' => 'Water Drop (Menstruasi)',
-            ],
         ]);
     }
 
@@ -61,9 +50,11 @@ class ModuleController extends Controller
             'content' => 'required|string',
         ]);
 
-        Module::create($validated);
+        $module = Module::create($validated);
 
-        return redirect()->route('admin.modules.index')->with('success', 'Modul edukasi berhasil dibuat!');
+        return redirect()->route('admin.modules.index')
+            ->with('success', 'Modul edukasi berhasil dibuat!')
+            ->with('module_id', $module->id);
     }
 
     public function edit(Module $module)
@@ -71,17 +62,6 @@ class ModuleController extends Controller
         return Inertia::render('Admin/Modules/Form', [
             'module' => $module,
             'categories' => ['Pengetahuan', 'Sikap Positif', 'Perilaku Sehat'],
-            'icons' => [
-                'psychology_rounded' => 'Psychology (Mitos/Fakta)',
-                'volunteer_activism_rounded' => 'Volunteer Activism (Kelola Nyeri)',
-                'favorite_rounded' => 'Favorite (Bangga Tubuhmu)',
-                'healing_rounded' => 'Healing (Kesehatan)',
-                'clean_hands_rounded' => 'Clean Hands (Kebersihan)',
-                'restaurant_rounded' => 'Restaurant (Nutrisi)',
-                'checkroom_rounded' => 'Checkroom (Pembalut)',
-                'self_improvement_rounded' => 'Self Improvement (PMS)',
-                'water_drop_rounded' => 'Water Drop (Menstruasi)',
-            ],
         ]);
     }
 

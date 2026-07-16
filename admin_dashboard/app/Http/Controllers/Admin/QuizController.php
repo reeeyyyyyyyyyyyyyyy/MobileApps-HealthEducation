@@ -37,13 +37,23 @@ class QuizController extends Controller
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $modules = Module::orderBy('title', 'asc')->get(['id', 'title']);
+
+        $questions = [];
+        if ($request->has('questions')) {
+            $decoded = json_decode($request->query('questions'), true);
+            if (is_array($decoded)) {
+                $questions = $decoded;
+            }
+        }
 
         return Inertia::render('Admin/Quizzes/Form', [
             'quiz' => null,
             'modules' => $modules,
+            'preselectedModuleId' => $request->query('module_id'),
+            'preselectedQuestions' => $questions,
         ]);
     }
 

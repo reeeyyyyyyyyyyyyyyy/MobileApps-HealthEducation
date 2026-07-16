@@ -1,9 +1,97 @@
 @import 'tailwindcss';
+@plugin '@tailwindcss/typography';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+
+    --color-teal-50: #F0FDFA;
+    --color-teal-100: #CCFBF1;
+    --color-teal-200: #99F6E4;
+    --color-teal-300: #5EEAD4;
+    --color-teal-400: #2DD4BF;
+    --color-teal-500: #14B8A6;
+    --color-teal-600: #0F766E;
+    --color-teal-700: #0B5E57;
+    --color-teal-800: #134E4A;
+    --color-teal-900: #042F2E;
+
+    --color-terracotta-50: #FEF6F0;
+    --color-terracotta-100: #FDE8D6;
+    --color-terracotta-200: #FBCEAE;
+    --color-terracotta-300: #F7AE82;
+    --color-terracotta-400: #F28755;
+    --color-terracotta-500: #ED6B38;
+    --color-terracotta-600: #C45D2A;
+    --color-terracotta-700: #A34B23;
+    --color-terracotta-800: #853D1F;
+    --color-terracotta-900: #6B331C;
+
+    --color-sage-50: #F3F6F1;
+    --color-sage-100: #E0E8DB;
+    --color-sage-200: #C1D1B7;
+    --color-sage-300: #9DB58E;
+    --color-sage-400: #7D9A6B;
+    --color-sage-500: #6B8E5A;
+    --color-sage-600: #527044;
+    --color-sage-700: #3F5835;
+    --color-sage-800: #35472D;
+    --color-sage-900: #2C3B26;
+
+    --color-sand-50: #FEFCF8;
+    --color-sand-100: #FDF8F3;
+    --color-sand-200: #F9EDE0;
+    --color-sand-300: #F2DDC5;
+    --color-sand-400: #E8CAA5;
+    --color-sand-500: #DDB485;
+    --color-sand-600: #C99A66;
+    --color-sand-700: #A87C4F;
+    --color-sand-800: #8B6544;
+    --color-sand-900: #735339;
+
+    --color-brick-50: #FDF2F2;
+    --color-brick-100: #F9E0E0;
+    --color-brick-200: #F4C5C5;
+    --color-brick-300: #EB9E9E;
+    --color-brick-400: #DE6F6F;
+    --color-brick-500: #CF4A4A;
+    --color-brick-600: #B53D3D;
+    --color-brick-700: #983232;
+    --color-brick-800: #7F2C2C;
+    --color-brick-900: #6B2828;
+}
+
+html { scroll-behavior: smooth; }
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+::selection { background-color: #0F766E20; color: #0F766E; }
+
+/* TipTap ProseMirror — fix space bar */
+.ProseMirror[contenteditable="true"] {
+  white-space: pre-wrap !important;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: #94a3b8;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
 }

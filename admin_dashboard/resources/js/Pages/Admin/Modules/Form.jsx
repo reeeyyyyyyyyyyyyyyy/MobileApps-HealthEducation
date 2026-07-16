@@ -1,39 +1,46 @@
-import React from 'react';
-import { Head, Link, useForm } from '@inertiajs/react';
+import React, { useState } from 'react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { useToast } from '@/hooks/useToast';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Video, AlertCircle, Upload } from 'lucide-react';
+import IconPicker from '@/Components/UI/IconPicker';
+import RichTextEditor from '@/Components/UI/RichTextEditor';
 
-import { gooeyToast } from 'goey-toast';
-
-export default function Form({ module, categories, icons }) {
+export default function Form({ module, categories }) {
     const isEdit = !!module;
+    const { error } = useToast();
+    const [showConfirm, setShowConfirm] = useState(false);
+    const { props } = usePage();
+    const uploadResult = props.flash?.upload_result;
 
     const { data, setData, post, put, processing, errors } = useForm({
-        title: module?.title || '',
-        category: module?.category || 'Pengetahuan',
-        duration: module?.duration || '',
-        icon_name: module?.icon_name || 'water_drop_rounded',
+        title: module?.title || uploadResult?.title || '',
+        category: module?.category || uploadResult?.category || 'Pengetahuan',
+        duration: module?.duration || uploadResult?.duration || '',
+        icon_name: module?.icon_name || 'psychology_rounded',
         video_url: module?.video_url || '',
-        content: module?.content || '',
+        content: module?.content || uploadResult?.content || '',
     });
-
-    React.useEffect(() => {
-        const errorKeys = Object.keys(errors);
-        if (errorKeys.length > 0) {
-            gooeyToast.error('Gagal menyimpan modul!', {
-                description: errors[errorKeys[0]],
-                preset: 'bouncy',
-                duration: 5000
-            });
-        }
-    }, [errors]);
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        setShowConfirm(true);
+    };
+
+    const confirmSubmit = () => {
+        setShowConfirm(false);
         if (isEdit) {
-            put(`/admin/modules/${module.id}`);
+            put(`/admin/modules/${module.id}`, {
+                onError: (err) => error(err.message || 'Gagal memperbarui modul'),
+            });
         } else {
-            post('/admin/modules');
+            // Simpan questions ke localStorage sebelum redirect
+            if (uploadResult?.questions?.length > 0) {
+                localStorage.setItem('pending_quiz_questions', JSON.stringify(uploadResult.questions));
+            }
+            post('/admin/modules', {
+                onError: (err) => error(err.message || 'Gagal membuat modul'),
+            });
         }
     };
 
@@ -41,16 +48,26 @@ export default function Form({ module, categories, icons }) {
         <AdminLayout title={isEdit ? 'Edit Modul Edukasi' : 'Tambah Modul Edukasi'} titleParent="Modul Edukasi">
             <Head title={`${isEdit ? 'Edit' : 'Tambah'} Modul Edukasi — BloomFem`} />
 
-            <div className="max-w-3xl">
-                <Link
-                    href="/admin/modules"
-                    className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors mb-6"
-                >
+            <div className="max-w-4xl">
+                <Link href="/admin/modules" className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors mb-6">
                     <ArrowLeft className="w-3.5 h-3.5" />
                     Kembali ke Daftar Modul
                 </Link>
 
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+                {uploadResult && (
+                    <div className="mb-6 p-4 bg-teal-50 border border-teal-200 rounded-2xl flex items-start gap-3">
+                        <Upload className="w-5 h-5 text-teal-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-sm font-bold text-teal-800">Hasil Upload File</p>
+                            <p className="text-xs text-teal-600 mt-0.5">Data dari file telah diisikan otomatis. Silakan review dan sesuaikan sebelum menyimpan.</p>
+                            {uploadResult.questions?.length > 0 && (
+                                <p className="text-xs font-bold text-teal-700 mt-1.5">{uploadResult.questions.length} soal kuis terdeteksi dari file.</p>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                <div className="bg-white border border-sand-200/80 rounded-2xl p-6 shadow-sm">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Title */}
                         <div>
@@ -62,13 +79,13 @@ export default function Form({ module, categories, icons }) {
                                 value={data.title}
                                 onChange={(e) => setData('title', e.target.value)}
                                 placeholder="Ketik judul artikel edukasi..."
-                                className={`block w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-violet-500 focus:ring-3 focus:ring-violet-500/10 text-sm font-semibold transition-all ${
-                                    errors.title ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/10' : ''
+                                className={`block w-full px-4 py-3 rounded-xl border text-sm font-semibold transition-all ${
+                                    errors.title ? 'border-brick-300 focus:border-brick-500 focus:ring-3 focus:ring-brick-500/10' : 'border-sand-200 focus:border-teal-500 focus:ring-3 focus:ring-teal-500/10'
                                 }`}
                                 required
                             />
                             {errors.title && (
-                                <p className="text-xs font-bold text-rose-500 mt-2">{errors.title}</p>
+                                <p className="text-xs font-bold text-brick-500 mt-2">{errors.title}</p>
                             )}
                         </div>
 
@@ -81,8 +98,8 @@ export default function Form({ module, categories, icons }) {
                                 <select
                                     value={data.category}
                                     onChange={(e) => setData('category', e.target.value)}
-                                    className={`block w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-violet-500 focus:ring-3 focus:ring-violet-500/10 text-sm font-semibold transition-all cursor-pointer bg-white ${
-                                        errors.category ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/10' : ''
+                                    className={`block w-full px-4 py-3 rounded-xl border text-sm font-semibold transition-all cursor-pointer bg-white ${
+                                        errors.category ? 'border-brick-300 focus:border-brick-500 focus:ring-3 focus:ring-brick-500/10' : 'border-sand-200 focus:border-teal-500 focus:ring-3 focus:ring-teal-500/10'
                                     }`}
                                     required
                                 >
@@ -93,7 +110,7 @@ export default function Form({ module, categories, icons }) {
                                     ))}
                                 </select>
                                 {errors.category && (
-                                    <p className="text-xs font-bold text-rose-500 mt-2">{errors.category}</p>
+                                    <p className="text-xs font-bold text-brick-500 mt-2">{errors.category}</p>
                                 )}
                             </div>
 
@@ -107,89 +124,75 @@ export default function Form({ module, categories, icons }) {
                                     value={data.duration}
                                     onChange={(e) => setData('duration', e.target.value)}
                                     placeholder="Contoh: 5 menit"
-                                    className={`block w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-violet-500 focus:ring-3 focus:ring-violet-500/10 text-sm font-semibold transition-all ${
-                                        errors.duration ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/10' : ''
+                                    className={`block w-full px-4 py-3 rounded-xl border text-sm font-semibold transition-all ${
+                                        errors.duration ? 'border-brick-300 focus:border-brick-500 focus:ring-3 focus:ring-brick-500/10' : 'border-sand-200 focus:border-teal-500 focus:ring-3 focus:ring-teal-500/10'
                                     }`}
                                     required
                                 />
                                 {errors.duration && (
-                                    <p className="text-xs font-bold text-rose-500 mt-2">{errors.duration}</p>
+                                    <p className="text-xs font-bold text-brick-500 mt-2">{errors.duration}</p>
                                 )}
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Icon Name Selection */}
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                    Ikon Modul
-                                </label>
-                                <select
-                                    value={data.icon_name}
-                                    onChange={(e) => setData('icon_name', e.target.value)}
-                                    className="block w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-violet-500 focus:ring-3 focus:ring-violet-500/10 text-sm font-semibold transition-all cursor-pointer bg-white"
-                                    required
-                                >
-                                    {Object.entries(icons).map(([val, label]) => (
-                                        <option key={val} value={val}>
-                                            {label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {/* Video URL */}
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                    Link Video YouTube (Opsional)
-                                </label>
-                                <input
-                                    type="url"
-                                    value={data.video_url}
-                                    onChange={(e) => setData('video_url', e.target.value)}
-                                    placeholder="Contoh: https://youtube.com/watch?v=..."
-                                    className={`block w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-violet-500 focus:ring-3 focus:ring-violet-500/10 text-sm font-semibold transition-all ${
-                                        errors.video_url ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/10' : ''
-                                    }`}
-                                />
-                                {errors.video_url && (
-                                    <p className="text-xs font-bold text-rose-500 mt-2">{errors.video_url}</p>
-                                )}
-                            </div>
+                        {/* Icon Picker Visual */}
+                        <div>
+                            <IconPicker
+                                value={data.icon_name}
+                                onChange={(val) => setData('icon_name', val)}
+                                label="Ikon Modul"
+                            />
+                            <p className="text-xs text-slate-400 mt-1">Ikon akan tampil di kartu modul pada aplikasi Flutter & dashboard.</p>
                         </div>
 
-                        {/* Content text */}
+                        {/* Video URL */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <Video className="w-4 h-4" />
+                                Link Video YouTube (Opsional)
+                            </label>
+                            <input
+                                type="url"
+                                value={data.video_url}
+                                onChange={(e) => setData('video_url', e.target.value)}
+                                placeholder="Contoh: https://youtube.com/watch?v=..."
+                                className={`block w-full px-4 py-3 rounded-xl border text-sm font-semibold transition-all ${
+                                    errors.video_url ? 'border-brick-300 focus:border-brick-500 focus:ring-3 focus:ring-brick-500/10' : 'border-sand-200 focus:border-teal-500 focus:ring-3 focus:ring-teal-500/10'
+                                }`}
+                            />
+                            {errors.video_url && (
+                                <p className="text-xs font-bold text-brick-500 mt-2">{errors.video_url}</p>
+                            )}
+                        </div>
+
+                        {/* Rich Text Editor */}
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                                 Konten Edukasi Lengkap
                             </label>
-                            <textarea
+                            <RichTextEditor
                                 value={data.content}
-                                onChange={(e) => setData('content', e.target.value)}
-                                placeholder="Ketik isi modul edukasi lengkap..."
-                                rows="12"
-                                className={`block w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-violet-500 focus:ring-3 focus:ring-violet-500/10 text-sm font-semibold transition-all font-sans leading-relaxed ${
-                                    errors.content ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/10' : ''
-                                }`}
-                                required
+                                onChange={(val) => setData('content', val)}
+                                label="Konten Edukasi"
+                                placeholder="Tulis konten edukasi di sini... (heading, bold, italic, list, gambar, link, blockquote, dll)"
                             />
                             {errors.content && (
-                                <p className="text-xs font-bold text-rose-500 mt-2">{errors.content}</p>
+                                <p className="text-xs font-bold text-brick-500 mt-2">{errors.content}</p>
                             )}
                         </div>
 
                         {/* Action buttons */}
-                        <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                        <div className="flex justify-end gap-3 pt-4 border-t border-sand-100">
                             <Link
                                 href="/admin/modules"
-                                className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 text-sm font-bold active:scale-98 transition-all"
+                                className="px-5 py-2.5 rounded-xl border border-sand-200 text-slate-500 hover:text-slate-700 hover:bg-sand-50 text-sm font-bold active:scale-98 transition-all"
                             >
                                 Batalkan
                             </Link>
                             <button
                                 type="submit"
                                 disabled={processing}
-                                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-violet-600 hover:bg-violet-700 active:scale-98 transition-all rounded-xl shadow-md shadow-violet-100 disabled:opacity-50"
+                                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 active:scale-98 transition-all rounded-xl shadow-md shadow-teal-200 disabled:opacity-50"
                             >
                                 <Save className="w-4 h-4" />
                                 {isEdit ? 'Perbarui Modul' : 'Simpan Modul'}
@@ -198,6 +201,34 @@ export default function Form({ module, categories, icons }) {
                     </form>
                 </div>
             </div>
+
+            {/* Confirmation Modal */}
+            {showConfirm && (
+                <>
+                    <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40" onClick={() => setShowConfirm(false)} />
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowConfirm(false)}>
+                        <div className="bg-white rounded-2xl shadow-xl border border-sand-200 p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-start gap-4 mb-5">
+                                <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center flex-shrink-0">
+                                    <AlertCircle className="w-6 h-6 text-teal-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-extrabold text-slate-800">{isEdit ? 'Perbarui Modul?' : 'Simpan Modul?'}</h3>
+                                    <p className="text-sm text-slate-500 mt-1">
+                                        {isEdit ? 'Perubahan akan langsung tampil di aplikasi BloomFem.' : 'Modul akan langsung ditampilkan di aplikasi BloomFem untuk pengguna.'}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-3">
+                                <button type="button" onClick={() => setShowConfirm(false)} className="px-5 py-2.5 rounded-xl border border-sand-200 text-slate-500 hover:text-slate-700 hover:bg-sand-50 text-sm font-bold active:scale-98 transition-all">Batal</button>
+                                <button type="button" onClick={confirmSubmit} className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 active:scale-98 transition-all rounded-xl shadow-md shadow-teal-200">
+                                    <Save className="w-4 h-4" /> Ya, Simpan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
         </AdminLayout>
     );
 }
