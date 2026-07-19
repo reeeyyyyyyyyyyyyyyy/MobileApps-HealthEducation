@@ -38,6 +38,7 @@ class _KuisPageState extends State<KuisPage> {
   }
 
   Future<void> _loadAllData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -73,10 +74,12 @@ class _KuisPageState extends State<KuisPage> {
       final completedList = prefs.getStringList('completed_modules_list') ?? [];
       _readModuleIds = Set<String>.from(completedList);
 
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _errorMessage = e.toString();

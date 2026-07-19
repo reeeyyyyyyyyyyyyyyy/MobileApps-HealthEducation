@@ -7,7 +7,10 @@ use App\Http\Controllers\Admin\ModuleController;
 use App\Http\Controllers\Admin\QuizController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\PathController;
+use App\Http\Controllers\Admin\AnnouncementController;
 use App\Http\Controllers\Admin\UploadController;
+use App\Http\Controllers\Admin\TipController;
 use Inertia\Inertia;
 
 // Welcome Page
@@ -18,7 +21,10 @@ Route::get('/', function () {
     ]);
 });
 
-// Admin Authentication Routes
+// Public tip endpoint for Flutter (no auth required)
+Route::get('/api/tips/today', [TipController::class, 'today']);
+
+// Admin routes with auth
 Route::get('/admin/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/admin/login', [LoginController::class, 'login']);
 Route::post('/admin/logout', [LoginController::class, 'logout'])->name('logout');
@@ -36,6 +42,7 @@ Route::prefix('admin')->middleware('auth')->group(function () {
         'update' => 'admin.modules.update',
         'destroy' => 'admin.modules.destroy',
     ]);
+    Route::put('modules/{module}/publish', [ModuleController::class, 'publish'])->name('admin.modules.publish');
 
     // Quizzes CRUD
     Route::resource('quizzes', QuizController::class)->names([
@@ -59,4 +66,22 @@ Route::prefix('admin')->middleware('auth')->group(function () {
     // Upload & Parse
     Route::post('upload/parse', [UploadController::class, 'parse'])->name('admin.upload.parse');
     Route::post('upload/store-questions', [UploadController::class, 'storeQuestions'])->name('admin.upload.store-questions');
+
+    // Daily Tips
+    Route::get('tips', [TipController::class, 'index'])->name('admin.tips.index');
+    Route::post('tips', [TipController::class, 'store'])->name('admin.tips.store');
+    Route::post('tips/generate', [TipController::class, 'generate'])->name('admin.tips.generate');
+    Route::put('tips/{tip}', [TipController::class, 'update'])->name('admin.tips.update');
+    Route::delete('tips/{tip}', [TipController::class, 'destroy'])->name('admin.tips.destroy');
+
+    // Learning Paths
+    Route::get('paths', [PathController::class, 'index'])->name('admin.paths.index');
+    Route::post('paths', [PathController::class, 'store'])->name('admin.paths.store');
+    Route::put('paths/{id}/order', [PathController::class, 'updateOrder'])->name('admin.paths.update-order');
+    Route::delete('paths/{id}', [PathController::class, 'destroy'])->name('admin.paths.destroy');
+
+    // Announcements
+    Route::get('announcements', [AnnouncementController::class, 'index'])->name('admin.announcements.index');
+    Route::post('announcements', [AnnouncementController::class, 'store'])->name('admin.announcements.store');
+    Route::delete('announcements/{id}', [AnnouncementController::class, 'destroy'])->name('admin.announcements.destroy');
 });

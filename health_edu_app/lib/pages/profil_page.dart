@@ -5,6 +5,8 @@ import '../utils/toast_helper.dart';
 import '../utils/badge_helper.dart';
 import 'onboarding_page.dart';
 import 'edit_profil_page.dart';
+import 'emergency_page.dart';
+import 'bookmarks_page.dart';
 
 class ProfilPage extends StatefulWidget {
   const ProfilPage({super.key});
@@ -397,6 +399,12 @@ class _ProfilPageState extends State<ProfilPage> {
         iconColor: primaryColor,
         title: 'Modul yang Disimpan',
         isDestructive: false,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const BookmarksPage()),
+          );
+        },
       ),
       _MenuItemData(
         icon: Icons.lock_outline_rounded,
@@ -409,6 +417,18 @@ class _ProfilPageState extends State<ProfilPage> {
         iconColor: primaryColor,
         title: 'Notifikasi Pengingat',
         isDestructive: false,
+      ),
+      _MenuItemData(
+        icon: Icons.warning_amber_rounded,
+        iconColor: const Color(0xFFEF4444),
+        title: 'Kontak & Bantuan Darurat',
+        isDestructive: false,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const EmergencyPage()),
+          );
+        },
       ),
       _MenuItemData(
         icon: Icons.logout_rounded,
@@ -543,6 +563,8 @@ class _ProfilPageState extends State<ProfilPage> {
         }
         
         final ownedBadgeIds = snapshot.data ?? [];
+        final ownedBadges = BadgeHelper.allBadges.where((b) => ownedBadgeIds.contains(b.id)).toList();
+        final lockedBadges = BadgeHelper.allBadges.where((b) => !ownedBadgeIds.contains(b.id)).toList();
         
         return Container(
           padding: const EdgeInsets.all(16),
@@ -560,96 +582,172 @@ class _ProfilPageState extends State<ProfilPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Kumpulkan lencana dengan menyelesaikan berbagai kuis dan modul pembelajaran!',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: textSecondary,
-                ),
+              Row(
+                children: [
+                  Text(
+                    'Lencana Terkumpul',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textPrimary),
+                  ),
+                  Spacer(),
+                  Text(
+                    '${ownedBadges.length}/${BadgeHelper.allBadges.length}',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textSecondary),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 0.8,
-                ),
-                itemCount: BadgeHelper.allBadges.length,
-                itemBuilder: (context, index) {
-                  final badge = BadgeHelper.allBadges[index];
-                  final isOwned = ownedBadgeIds.contains(badge.id);
-                  
-                  return GestureDetector(
-                    onTap: () {
-                      _showBadgeDetailDialog(context, badge, isOwned);
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isOwned ? badge.bgColor : const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isOwned ? badge.color.withValues(alpha: 0.3) : const Color(0xFFE2E8F0),
-                          width: 1.5,
+              SizedBox(height: 8),
+              Text(
+                'Kumpulkan lencana dengan menyelesaikan kuis dan modul pembelajaran!',
+                style: TextStyle(fontSize: 11, color: textSecondary),
+              ),
+              SizedBox(height: 16),
+              if (ownedBadges.isEmpty)
+                Container(
+                  padding: EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.emoji_events_outlined, size: 40, color: Color(0xFFCBD5E1)),
+                      SizedBox(height: 8),
+                      Text('Belum ada lencana', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textSecondary)),
+                    ],
+                  ),
+                )
+              else
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 0.8,
+                  ),
+                  itemCount: ownedBadges.length,
+                  itemBuilder: (context, index) {
+                    final badge = ownedBadges[index];
+                    return GestureDetector(
+                      onTap: () => _showBadgeDetailDialog(context, badge, true),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: badge.bgColor,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: badge.color.withValues(alpha: 0.3), width: 1.5),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 48, height: 48,
+                              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: badge.color.withValues(alpha: 0.2), blurRadius: 8, offset: Offset(0, 2))]),
+                              child: Icon(badge.icon, color: badge.color, size: 26),
+                            ),
+                            SizedBox(height: 8),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 4),
+                              child: Text(badge.name, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: textPrimary)),
+                            ),
+                            SizedBox(height: 2),
+                            Text('Terbuka', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: badge.color)),
+                          ],
                         ),
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: isOwned ? Colors.white : const Color(0xFFCBD5E1),
-                              shape: BoxShape.circle,
-                              boxShadow: isOwned
-                                  ? [
-                                      BoxShadow(
-                                        color: badge.color.withValues(alpha: 0.2),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                            child: Icon(
-                              isOwned ? badge.icon : Icons.lock_outline_rounded,
-                              color: isOwned ? badge.color : const Color(0xFF64748B),
-                              size: 26,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                            child: Text(
-                              badge.name,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: isOwned ? textPrimary : const Color(0xFF94A3B8),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            isOwned ? 'Terbuka' : 'Terkunci',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              color: isOwned ? badge.color : const Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ],
-                      ),
+                    );
+                  },
+                ),
+              SizedBox(height: 12),
+              // Lihat badge lainnya
+              if (lockedBadges.isNotEmpty)
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => _showAllBadgesModal(ownedBadgeIds),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Color(0xFFF8FAFC),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: EdgeInsets.symmetric(vertical: 12),
                     ),
-                  );
-                },
+                    child: Text(
+                      'Lihat ${lockedBadges.length} lencana lainnya yang belum didapatkan →',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: primaryColor),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showAllBadgesModal(List<String> ownedBadgeIds) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return Container(
+          padding: EdgeInsets.all(24),
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Color(0xFFCBD5E1), borderRadius: BorderRadius.circular(2))),
               ),
+              SizedBox(height: 20),
+              Text('Semua Lencana', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary)),
+              SizedBox(height: 4),
+              Text('${ownedBadgeIds.length}/${BadgeHelper.allBadges.length} terkumpul', style: TextStyle(fontSize: 13, color: textSecondary)),
+              SizedBox(height: 20),
+              Expanded(
+                child: GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 0.85,
+                  ),
+                  itemCount: BadgeHelper.allBadges.length,
+                  itemBuilder: (context, index) {
+                    final badge = BadgeHelper.allBadges[index];
+                    final isOwned = ownedBadgeIds.contains(badge.id);
+                    return GestureDetector(
+                      onTap: () => _showBadgeDetailDialog(context, badge, isOwned),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isOwned ? badge.bgColor : Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: isOwned ? badge.color.withValues(alpha: 0.3) : Color(0xFFE2E8F0), width: 1.5),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 44, height: 44,
+                              decoration: BoxDecoration(color: isOwned ? Colors.white : Color(0xFFCBD5E1), shape: BoxShape.circle),
+                              child: Icon(isOwned ? badge.icon : Icons.lock_outline_rounded, color: isOwned ? badge.color : Color(0xFF64748B), size: 24),
+                            ),
+                            SizedBox(height: 8),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 4),
+                              child: Text(badge.name, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isOwned ? textPrimary : Color(0xFF94A3B8))),
+                            ),
+                            SizedBox(height: 2),
+                            Text(isOwned ? '✓' : '${badge.description.length > 20 ? badge.description.substring(0, 18) + '...' : badge.description}', textAlign: TextAlign.center, style: TextStyle(fontSize: 8, color: isOwned ? badge.color : Color(0xFF94A3B8))),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              SizedBox(height: 12),
             ],
           ),
         );

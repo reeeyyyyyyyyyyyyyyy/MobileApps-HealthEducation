@@ -17,6 +17,7 @@ class DetailModulPage extends StatefulWidget {
 }
 
 class _DetailModulPageState extends State<DetailModulPage> {
+  static const Color primaryColor = Color(0xFF8B5CF6);
   static const Color textPrimary = Color(0xFF1E293B);
   static const Color textSecondary = Color(0xFF64748B);
 
@@ -45,6 +46,10 @@ class _DetailModulPageState extends State<DetailModulPage> {
   int _linkedQuizXpReward = 0;
   bool _isQuizPassed = false;
 
+  // Bookmark
+  bool _isBookmarked = false;
+  bool _isBookmarkLoading = true;
+
   // Pelacakan Durasi & Posisi Video
   double _videoDurationSeconds = 0.0;
   double _videoPositionSeconds = 0.0;
@@ -56,6 +61,8 @@ class _DetailModulPageState extends State<DetailModulPage> {
 
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
+
+    _checkBookmark();
 
     final videoUrl = widget.module['video_url'] as String?;
     if (videoUrl != null && videoUrl.isNotEmpty) {
@@ -113,6 +120,14 @@ class _DetailModulPageState extends State<DetailModulPage> {
     _checkAlreadyCompleted();
     _incrementViewCount();
     _fetchLinkedQuiz();
+
+    // Handle short content: mark as completed immediately if no scrolling needed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients && _scrollController.position.maxScrollExtent <= 0) {
+        _progressPercentage = 100.0;
+        _markAsCompleted();
+      }
+    });
   }
 
   // Increment view_count di Supabase setiap kali modul dibuka
@@ -198,6 +213,53 @@ class _DetailModulPageState extends State<DetailModulPage> {
       } catch (e) {
         debugPrint('Error fetching duration: $e');
       }
+    }
+  }
+
+  Future<void> _checkBookmark() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    final moduleId = widget.module['id'] as String?;
+    if (user == null || moduleId == null) return;
+
+    try {
+      final res = await Supabase.instance.client
+          .from('user_bookmarks')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('module_id', moduleId)
+          .maybeSingle();
+
+      if (mounted) setState(() { _isBookmarked = res != null; _isBookmarkLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _isBookmarkLoading = false);
+    }
+  }
+
+  Future<void> _toggleBookmark() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    final moduleId = widget.module['id'] as String?;
+    if (user == null || moduleId == null) return;
+
+    final current = _isBookmarked;
+    setState(() => _isBookmarked = !_isBookmarked);
+
+    try {
+      if (current) {
+        await Supabase.instance.client
+            .from('user_bookmarks')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('module_id', moduleId);
+        if (mounted) ToastHelper.showSuccess(context, 'Modul dihapus dari tersimpan');
+      } else {
+        await Supabase.instance.client
+            .from('user_bookmarks')
+            .insert({'user_id': user.id, 'module_id': moduleId});
+        if (mounted) ToastHelper.showSuccess(context, 'Modul berhasil disimpan!');
+      }
+    } catch (e) {
+      setState(() => _isBookmarked = current);
+      if (mounted) ToastHelper.showError(context, 'Gagal menyimpan bookmark');
     }
   }
 
@@ -318,6 +380,35 @@ class _DetailModulPageState extends State<DetailModulPage> {
     // Catat ke SharedPreferences (unlock kuis terkait)
     completedList.add(moduleId);
     await prefs.setStringList('completed_modules_list', completedList);
+
+    // Beri EXP untuk membaca modul
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        final profile = await Supabase.instance.client
+            .from('profiles')
+            .select('total_xp, modul_selesai, level')
+            .eq('id', user.id)
+            .maybeSingle();
+        if (profile != null) {
+          int xp = (profile['total_xp'] as num?)?.toInt() ?? 0;
+          int modulCount = (profile['modul_selesai'] as num?)?.toInt() ?? 0;
+          int level = (profile['level'] as num?)?.toInt() ?? 1;
+          int newXp = xp + 50; // 50 XP per modul
+          int newLevel = level;
+          int newModulCount = modulCount + 1;
+          if (newXp >= level * 100) {
+            newLevel++;
+          }
+          await Supabase.instance.client
+              .from('profiles')
+              .update({'total_xp': newXp, 'modul_selesai': newModulCount, 'level': newLevel})
+              .eq('id', user.id);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error updating XP: $e');
+    }
 
     setState(() {
       _isAlreadyCompleted = true;
@@ -505,6 +596,19 @@ class _DetailModulPageState extends State<DetailModulPage> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          if (_isBookmarkLoading)
+            SizedBox(width: 24, height: 24, child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor)))
+          else
+            IconButton(
+              icon: Icon(
+                _isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                color: _isBookmarked ? Color(0xFFEC4899) : textPrimary,
+              ),
+              onPressed: _toggleBookmark,
+              tooltip: _isBookmarked ? 'Hapus dari tersimpan' : 'Simpan modul',
+            ),
+        ],
       ),
       body: Stack(
         children: [

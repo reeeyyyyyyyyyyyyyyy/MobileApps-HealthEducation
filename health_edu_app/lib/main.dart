@@ -72,23 +72,16 @@ class MainScreen extends StatefulWidget {
 
 class MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
-  int _belajarCategoryIndex = 0;
 
-  void navigateToPage(int index, {int categoryIndex = 0}) {
+  void navigateToPage(int index) {
     setState(() {
       _selectedIndex = index;
-      if (index == 1) {
-        _belajarCategoryIndex = categoryIndex;
-      }
     });
   }
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
-      if (index == 1) {
-        _belajarCategoryIndex = 0; // Reset ke "Semua" jika ditekan manual dari tab bar
-      }
     });
   }
 
@@ -96,7 +89,7 @@ class MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final List<Widget> pages = <Widget>[
       const BerandaPage(),
-      BelajarPage(initialCategoryIndex: _belajarCategoryIndex),
+      const BelajarPage(),
       const KuisPage(),
       const KomunitasPage(),
       const ProfilPage(),

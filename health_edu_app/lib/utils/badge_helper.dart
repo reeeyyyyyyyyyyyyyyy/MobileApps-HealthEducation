@@ -47,6 +47,46 @@ class BadgeHelper {
       color: Color(0xFF3B82F6),
       bgColor: Color(0xFFDBEAFE),
     ),
+    BadgeDefinition(
+      id: 'konsisten',
+      name: 'Rajin Belajar',
+      description: 'Menyelesaikan 3 modul dalam 1 minggu',
+      icon: Icons.trending_up_rounded,
+      color: Color(0xFF0EA5E9),
+      bgColor: Color(0xFFE0F2FE),
+    ),
+    BadgeDefinition(
+      id: 'detektif_siklus',
+      name: 'Detektif Siklus',
+      description: 'Mencatat siklus menstruasi selama 3 bulan berturut-turut',
+      icon: Icons.calendar_month_rounded,
+      color: Color(0xFFEC4899),
+      bgColor: Color(0xFFFDF2F8),
+    ),
+    BadgeDefinition(
+      id: 'sahabat',
+      name: 'Sahabat BloomFem',
+      description: 'Bergabung selama 30 hari dan aktif belajar',
+      icon: Icons.diversity_3_rounded,
+      color: Color(0xFFF97316),
+      bgColor: Color(0xFFFFF7ED),
+    ),
+    BadgeDefinition(
+      id: 'master_kuis',
+      name: 'Master Kuis',
+      description: 'Lulus 10 kuis dengan nilai di atas 80',
+      icon: Icons.school_rounded,
+      color: Color(0xFF8B5CF6),
+      bgColor: Color(0xFFF5F3FF),
+    ),
+    BadgeDefinition(
+      id: 'komunitas',
+      name: 'Berani Bersuara',
+      description: 'Membuat 5 postingan di forum komunitas',
+      icon: Icons.forum_rounded,
+      color: Color(0xFF10B981),
+      bgColor: Color(0xFFECFDF5),
+    ),
   ];
 
   /// Periksa dan berikan lencana setelah user lulus kuis.
@@ -121,6 +161,59 @@ class BadgeHelper {
       if (!existingBadgeNames.contains('pejuang_tangguh') && hadFailedBefore) {
         await _insertBadge(user.id, 'pejuang_tangguh');
         newlyUnlocked.add('Pejuang Tangguh');
+      }
+
+      // ═══ NEW BADGES ═══
+
+      // 6. Rajin Belajar — Selesaikan 3 modul dalam 1 minggu (readModulesCount >= 3)
+      if (!existingBadgeNames.contains('konsisten') && readModulesCount >= 3) {
+        await _insertBadge(user.id, 'konsisten');
+        newlyUnlocked.add('Rajin Belajar');
+      }
+
+      // 7. Master Kuis — Lulus 10 kuis dengan nilai di atas 80
+      if (!existingBadgeNames.contains('master_kuis') && passedCount >= 10) {
+        await _insertBadge(user.id, 'master_kuis');
+        newlyUnlocked.add('Master Kuis');
+      }
+
+      // 8. Sahabat BloomFem — Membuka aplikasi minimal 30 hari (berbeda tanggal)
+      if (!existingBadgeNames.contains('sahabat')) {
+        final visitsResponse = await Supabase.instance.client
+            .from('user_daily_visits')
+            .select('id')
+            .eq('user_id', user.id);
+        final visitsCount = (visitsResponse as List).length;
+        if (visitsCount >= 30) {
+          await _insertBadge(user.id, 'sahabat');
+          newlyUnlocked.add('Sahabat BloomFem');
+        }
+      }
+
+      // 9. Detektif Siklus — Mencatat minimal 30 hari di daily_logs
+      if (!existingBadgeNames.contains('detektif_siklus')) {
+        final logsResponse = await Supabase.instance.client
+            .from('daily_logs')
+            .select('id')
+            .eq('user_id', user.id);
+        final logsCount = (logsResponse as List).length;
+        if (logsCount >= 30) {
+          await _insertBadge(user.id, 'detektif_siklus');
+          newlyUnlocked.add('Detektif Siklus');
+        }
+      }
+
+      // 10. Berani Bersuara — Membuat minimal 5 postingan di forum
+      if (!existingBadgeNames.contains('komunitas')) {
+        final postsResponse = await Supabase.instance.client
+            .from('posts')
+            .select('id')
+            .eq('user_id', user.id);
+        final postsCount = (postsResponse as List).length;
+        if (postsCount >= 5) {
+          await _insertBadge(user.id, 'komunitas');
+          newlyUnlocked.add('Berani Bersuara');
+        }
       }
     } catch (e) {
       debugPrint('Error checking badges: $e');

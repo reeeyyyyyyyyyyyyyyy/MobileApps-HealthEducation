@@ -15,4 +15,9 @@ class Module extends Model
     public $timestamps = false;
 
     protected $guarded = [];
+
+    protected $casts = [
+        'published' => 'boolean',
+        'scheduled_at' => 'datetime',
+    ];
 }

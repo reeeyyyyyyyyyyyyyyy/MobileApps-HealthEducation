@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Search, Plus, Edit2, Trash2, Eye, ExternalLink, HelpCircle, CheckCircle2 } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Eye, ExternalLink, HelpCircle, CheckCircle2, Send } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { Badge, Input, Select } from '@/Components/UI';
 import UploadButton from '@/Components/UploadButton';
@@ -99,6 +99,7 @@ export default function Index({ modules, filters }) {
                 <th className="py-4.5 px-6">Judul Modul</th>
                 <th className="py-4.5 px-6">Kategori</th>
                 <th className="py-4.5 px-6">Durasi</th>
+                <th className="py-4.5 px-6">Status</th>
                 <th className="py-4.5 px-6">Total Dilihat</th>
                 <th className="py-4.5 px-6 text-right">Aksi</th>
               </tr>
@@ -119,11 +120,23 @@ export default function Index({ modules, filters }) {
                       <Badge variant={getCategoryBadge(module.category)}>{module.category}</Badge>
                     </td>
                     <td className="py-4 px-6 font-semibold text-slate-500">{module.duration}</td>
+                    <td className="py-4 px-6">
+                      {module.published == 1 ? (
+                        <Badge variant="sage">Published</Badge>
+                      ) : module.scheduled_at ? (
+                        <Badge variant="amber">Terjadwal: {new Date(module.scheduled_at).toLocaleDateString('id-ID')}</Badge>
+                      ) : (
+                        <Badge variant="brick">Draft</Badge>
+                      )}
+                    </td>
                     <td className="py-4 px-6 font-semibold text-slate-500">
                       <div className="flex items-center gap-1.5"><Eye className="w-3.5 h-3.5 text-slate-300" /> {module.view_count || 0}</div>
                     </td>
                     <td className="py-4 px-6 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {module.published != 1 && !module.scheduled_at && (
+                          <button onClick={() => router.put(`/admin/modules/${module.id}/publish`, {}, { preserveScroll: true })} className="p-2 text-sage-600 hover:bg-sage-50 rounded-xl transition-all" title="Posting Sekarang"><Send className="w-4 h-4" /></button>
+                        )}
                         <Link href={`/admin/modules/${module.id}/edit`} className="p-2 text-slate-400 hover:bg-sand-50 hover:text-slate-700 rounded-xl transition-all" title="Edit Modul"><Edit2 className="w-4 h-4" /></Link>
                         <button onClick={() => handleDelete(module.id, module.title)} className="p-2 text-slate-400 hover:bg-brick-50 hover:text-brick-600 rounded-xl transition-all" title="Hapus Modul"><Trash2 className="w-4 h-4" /></button>
                       </div>

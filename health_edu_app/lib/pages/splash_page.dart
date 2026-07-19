@@ -63,6 +63,7 @@ class _SplashPageState extends State<SplashPage>
     if (session != null) {
       try {
         final userId = session.user.id;
+        await _logDailyVisit(userId);
         final response = await Supabase.instance.client
             .from('profiles')
             .select('has_menstruated')
@@ -96,6 +97,19 @@ class _SplashPageState extends State<SplashPage>
         context,
         MaterialPageRoute(builder: (context) => const OnboardingPage()),
       );
+    }
+  }
+
+  /// Catat kunjungan harian untuk badge "Sahabat BloomFem"
+  Future<void> _logDailyVisit(String userId) async {
+    try {
+      final today = DateTime.now().toIso8601String().split('T')[0];
+      await Supabase.instance.client.from('user_daily_visits').upsert({
+        'user_id': userId,
+        'visit_date': today,
+      }, onConflict: 'user_id,visit_date');
+    } catch (e) {
+      debugPrint('Failed to log daily visit: $e');
     }
   }
 

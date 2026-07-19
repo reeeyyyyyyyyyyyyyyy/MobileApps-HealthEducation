@@ -3,7 +3,7 @@ import { Link, usePage, router } from '@inertiajs/react';
 import { gooeyToast, GooeyToaster } from 'goey-toast';
 import {
   LayoutDashboard, BookOpen, HelpCircle, AlertTriangle, Users,
-  LogOut, Menu, X
+  LogOut, Menu, X, Sparkles, Route, Moon, Sun
 } from 'lucide-react';
 import 'goey-toast/styles.css';
 
@@ -11,6 +11,19 @@ export default function AdminLayout({ children, title }) {
   const { props, url } = usePage();
   const { auth, flash } = props;
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [dark, setDark] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('bloomfem-dark');
+      if (stored !== null) return stored === 'true';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+    localStorage.setItem('bloomfem-dark', dark.toString());
+  }, [dark]);
 
   useEffect(() => {
     if (flash?.success) gooeyToast.success(flash.success, { preset: 'bouncy', duration: 4000 });
@@ -21,8 +34,10 @@ export default function AdminLayout({ children, title }) {
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, current: url === '/admin' },
     { name: 'Modul Edukasi', href: '/admin/modules', icon: BookOpen, current: url.startsWith('/admin/modules') },
     { name: 'Kuis Evaluasi', href: '/admin/quizzes', icon: HelpCircle, current: url.startsWith('/admin/quizzes') },
+    { name: 'Tips Harian', href: '/admin/tips', icon: Sparkles, current: url.startsWith('/admin/tips') },
     { name: 'Laporan Moderasi', href: '/admin/reports', icon: AlertTriangle, current: url.startsWith('/admin/reports') },
     { name: 'Progres Pengguna', href: '/admin/users', icon: Users, current: url.startsWith('/admin/users') },
+    { name: 'Learning Path', href: '/admin/paths', icon: Route, current: url.startsWith('/admin/paths') },
   ];
 
   const handleLogout = (e) => { e.preventDefault(); router.post('/admin/logout'); };
@@ -87,10 +102,15 @@ export default function AdminLayout({ children, title }) {
             <button onClick={() => setMobileOpen(!mobileOpen)} className="md:hidden p-1.5 text-slate-500 hover:bg-sand-50 rounded-lg transition-colors">
               {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
-            <h1 className="text-base font-bold text-slate-800">{title}</h1>
+            <h1 className="text-base font-bold text-slate-800 dark:text-slate-200">{title}</h1>
           </div>
-          <div className="text-xs font-semibold text-slate-400 bg-sand-50 px-3 py-1.5 rounded-lg">
-            {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          <div className="flex items-center gap-2">
+            <button onClick={() => setDark(!dark)} className="p-2 text-slate-400 hover:bg-sand-50 dark:hover:bg-slate-700 rounded-lg transition-all" title={dark ? 'Mode Terang' : 'Mode Gelap'}>
+              {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+            <div className="text-xs font-semibold text-slate-400 bg-sand-50 dark:bg-slate-700 px-3 py-1.5 rounded-lg">
+              {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </div>
           </div>
         </header>
 

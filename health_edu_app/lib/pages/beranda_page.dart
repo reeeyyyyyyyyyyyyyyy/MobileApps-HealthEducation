@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
@@ -67,6 +68,151 @@ class _BerandaPageState extends State<BerandaPage> {
     _loadConfirmedFinishedDate();
     _loadPopularModules();
     _fetchProfile();
+    _checkAndShowTip();
+    _startModulePolling();
+  }
+
+  Timer? _modulePollTimer;
+
+  void _startModulePolling() {
+    _modulePollTimer?.cancel();
+    _modulePollTimer = Timer.periodic(const Duration(seconds: 60), (_) => _checkNewModule());
+  }
+
+  Future<void> _checkNewModule() async {
+    if (!mounted) return;
+    try {
+      final today = DateTime.now().toIso8601String().split('T')[0];
+      final res = await Supabase.instance.client
+          .from('modules')
+          .select('id, title')
+          .eq('published', 1)
+          .gte('created_at', today)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (res == null) return;
+
+      final seenKey = 'notif_module_${res['id']}';
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(seenKey) == true) return;
+
+      await prefs.setBool(seenKey, true);
+
+      // Find path name
+      String pathName = 'Modul Mandiri';
+      try {
+        final pm = await Supabase.instance.client
+            .from('learning_path_modules')
+            .select('path_id')
+            .eq('module_id', res['id'])
+            .maybeSingle();
+        if (pm != null) {
+          final p = await Supabase.instance.client
+              .from('learning_paths')
+              .select('title')
+              .eq('id', pm['path_id'])
+              .maybeSingle();
+          if (p != null) pathName = p['title'];
+        }
+      } catch (_) {}
+
+      if (mounted) {
+        ToastHelper.showSuccess(context, 'Modul Baru!\n${res['title']} pada learning path "$pathName" telah tersedia!');
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _checkAndShowTip() async {
+    if (!mounted) return;
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      // Ambil semua tips yang sudah dilihat user hari ini
+      final today = DateTime.now().toIso8601String().split('T')[0];
+      final seenRes = await Supabase.instance.client
+          .from('user_tip_views')
+          .select('tip_id')
+          .eq('user_id', user.id)
+          .gte('created_at', today);
+      final seenIds = (seenRes as List).map((r) => r['tip_id'] as String).toSet();
+
+      // Ambil tips hari ini (yang dibuat hari ini)
+      final tipsRes = await Supabase.instance.client
+          .from('daily_tips')
+          .select()
+          .gte('created_at', today)
+          .order('created_at', ascending: false)
+          .limit(5);
+
+      final allTips = List<Map<String, dynamic>>.from(tipsRes);
+
+      // Cari tips yg blm dilihat
+      final unseen = allTips.where((t) => !seenIds.contains(t['id'])).toList();
+      if (unseen.isEmpty) return;
+
+      final tip = unseen.first;
+
+      if (mounted) _showDailyTipModal(tip);
+
+      // Tandai sudah dilihat
+      await Supabase.instance.client.from('user_tip_views').insert({
+        'user_id': user.id,
+        'tip_id': tip['id'],
+      });
+    } catch (e) {
+      debugPrint('Tip check failed: $e');
+    }
+  }
+
+  void _showDailyTipModal(Map<String, dynamic> tip) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56, height: 56,
+                decoration: BoxDecoration(color: const Color(0xFFD1FAE5), shape: BoxShape.circle),
+                child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF059669), size: 28),
+              ),
+              const SizedBox(height: 16),
+              Text('Tips Hari Ini', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 1)),
+              const SizedBox(height: 8),
+              Text(tip['title'] ?? '', textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+              const SizedBox(height: 12),
+              Text(tip['content'] ?? '', textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, color: Color(0xFF475569), height: 1.5)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(30)),
+                child: Text(tip['category'] ?? '', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B5CF6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('Siap Belajar!', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadConfirmedFinishedDate() async {
@@ -95,6 +241,7 @@ class _BerandaPageState extends State<BerandaPage> {
     final response = await Supabase.instance.client
         .from('modules')
         .select()
+        .eq('published', 1)
         .gt('view_count', 0)
         .order('view_count', ascending: false)
         .limit(3);
@@ -181,24 +328,11 @@ class _BerandaPageState extends State<BerandaPage> {
             _buildSmartTrackerWidget(context),
             const SizedBox(height: 20),
 
-            // 2) Banner Promosi
-            _buildPromoBanner(context),
-            const SizedBox(height: 20),
-
-            // AI Smart Banner
-            _buildSmartAIBanner(context),
-            const SizedBox(height: 24),
-
-            // 3) Section "Mulai Dari Sini"
-            _buildSectionTitle('Mulai dari sini'),
-            const SizedBox(height: 12),
-            _buildMenuGrid(context),
-            const SizedBox(height: 24),
-
-            // 4) Section "Topik Populer"
+            // Topik Populer
             _buildSectionTitle('Topik Populer'),
             const SizedBox(height: 12),
             _buildTopikPopuler(context),
+            const SizedBox(height: 24),
             const SizedBox(height: 16),
           ],
         ),
@@ -1075,113 +1209,6 @@ class _BerandaPageState extends State<BerandaPage> {
   }
 
   // ─────────────────────────────────────────────
-  //  BANNER PROMOSI (Interaktif)
-
-  // ─────────────────────────────────────────────
-  Widget _buildPromoBanner(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          MainScreen.of(context)?.navigateToPage(1, categoryIndex: 0); // Pindah ke tab Belajar (Semua)
-        },
-        borderRadius: BorderRadius.circular(24),
-        child: Ink(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: primaryColor.withValues(alpha: 0.3),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              // Teks motivasi
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Yuk, tingkatkan',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'Pengetahuan, Sikap,\ndan Perilaku Sehatmu!',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        height: 1.3,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text(
-                        'Mulai Belajar →',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: primaryColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Ilustrasi
-              Expanded(
-                flex: 2,
-                child: Container(
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.auto_stories_rounded, size: 48, color: Colors.white),
-                        SizedBox(height: 6),
-                        Icon(Icons.menu_book_outlined, size: 24, color: Colors.white70),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────
   //  SECTION TITLE
   // ─────────────────────────────────────────────
   Widget _buildSectionTitle(String title) {
@@ -1195,181 +1222,6 @@ class _BerandaPageState extends State<BerandaPage> {
     );
   }
 
-  // ─────────────────────────────────────────────
-  //  SMART AI BANNER
-  // ─────────────────────────────────────────────
-  Widget _buildSmartAIBanner(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const ChatBotPage()),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF8B5CF6), Color(0xFFD946EF)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFD946EF).withValues(alpha: 0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.smart_toy_rounded, color: Color(0xFF8B5CF6), size: 28),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Asisten Cerdas BloomFem',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Punya pertanyaan privasi? Tanya dan curhat aman di sini!',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────
-  //  GRID MENU "Mulai dari sini" — 3 Cards (Interaktif)
-  // ─────────────────────────────────────────────
-  Widget _buildMenuGrid(BuildContext context) {
-    final List<_MenuCardData> menus = [
-      _MenuCardData(
-        icon: Icons.psychology_rounded,
-        title: 'Pengetahuan',
-        subtitle: 'Pahami tubuhmu',
-        bgColor: const Color(0xFFEDE9FE), // ungu pastel
-        iconColor: const Color(0xFF8B5CF6),
-        categoryIndex: 1, // Kategori filter Pengetahuan
-      ),
-      _MenuCardData(
-        icon: Icons.favorite_rounded,
-        title: 'Sikap Positif',
-        subtitle: 'Jaga pikiranmu',
-        bgColor: const Color(0xFFFCE7F3), // pink pastel
-        iconColor: const Color(0xFFEC4899),
-        categoryIndex: 2, // Kategori filter Sikap
-      ),
-      _MenuCardData(
-        icon: Icons.volunteer_activism_rounded,
-        title: 'Perilaku Sehat',
-        subtitle: 'Hidup lebih baik',
-        bgColor: const Color(0xFFD1FAE5), // hijau pastel
-        iconColor: const Color(0xFF10B981),
-        categoryIndex: 3, // Kategori filter Perilaku
-      ),
-    ];
-
-    return Row(
-      children: menus.map((menu) {
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: menus.indexOf(menu) == 0 ? 0 : 6,
-              right: menus.indexOf(menu) == menus.length - 1 ? 0 : 6,
-            ),
-            child: _buildMenuCard(context, menu),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildMenuCard(BuildContext context, _MenuCardData data) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          MainScreen.of(context)?.navigateToPage(1, categoryIndex: data.categoryIndex);
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-          decoration: BoxDecoration(
-            color: data.bgColor,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: data.iconColor.withValues(alpha: 0.12),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Ikon dalam lingkaran
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(data.icon, color: data.iconColor, size: 26),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                data.title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                data.subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   // ─────────────────────────────────────────────
   //  TOPIK POPULER — Horizontal ListView (Dinamis dari Supabase)

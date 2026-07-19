@@ -6,7 +6,7 @@ import { ArrowLeft, Save, Video, AlertCircle, Upload } from 'lucide-react';
 import IconPicker from '@/Components/UI/IconPicker';
 import RichTextEditor from '@/Components/UI/RichTextEditor';
 
-export default function Form({ module, categories }) {
+export default function Form({ module, categories, learningPaths }) {
     const isEdit = !!module;
     const { error } = useToast();
     const [showConfirm, setShowConfirm] = useState(false);
@@ -20,6 +20,9 @@ export default function Form({ module, categories }) {
         icon_name: module?.icon_name || 'psychology_rounded',
         video_url: module?.video_url || '',
         content: module?.content || uploadResult?.content || '',
+        published: true,
+        scheduled_at: '',
+        path_id: 'none',
     });
 
     const handleSubmit = (e) => {
@@ -146,7 +149,7 @@ export default function Form({ module, categories }) {
                         </div>
 
                         {/* Video URL */}
-                        <div>
+                        <div className="relative">
                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                                 <Video className="w-4 h-4" />
                                 Link Video YouTube (Opsional)
@@ -162,6 +165,57 @@ export default function Form({ module, categories }) {
                             />
                             {errors.video_url && (
                                 <p className="text-xs font-bold text-brick-500 mt-2">{errors.video_url}</p>
+                            )}
+                        </div>
+
+                        {/* Learning Path (Opsional) */}
+                        {learningPaths?.length > 0 && (
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                                    Learning Path (Opsional)
+                                </label>
+                                <select
+                                    value={data.path_id || 'none'}
+                                    onChange={(e) => setData('path_id', e.target.value)}
+                                    className="block w-full px-4 py-3 rounded-xl border border-sand-200 focus:border-teal-500 focus:ring-3 focus:ring-teal-500/10 text-sm font-semibold transition-all cursor-pointer bg-white"
+                                >
+                                    <option value="none">Tidak ada (modul mandiri)</option>
+                                    {learningPaths.map(p => (
+                                        <option key={p.id} value={p.id}>{p.title}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {/* Scheduling */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Status Publikasi</label>
+                                <div className="flex items-center gap-4 px-4 py-3 rounded-xl border border-sand-200 bg-white">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="publish_status" checked={data.published && !data.scheduled_at} onChange={() => { setData('published', true); setData('scheduled_at', ''); }} className="text-teal-600" />
+                                        <span className="text-sm font-semibold text-slate-700">Posting sekarang</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="publish_status" checked={!data.published && !data.scheduled_at} onChange={() => { setData('published', false); setData('scheduled_at', ''); }} className="text-teal-600" />
+                                        <span className="text-sm font-semibold text-slate-700">Draft</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="publish_status" checked={!!data.scheduled_at} onChange={() => { const now = new Date(); setData('published', false); setData('scheduled_at', now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+'T'+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')); }} className="text-teal-600" />
+                                        <span className="text-sm font-semibold text-slate-700">Jadwalkan</span>
+                                    </label>
+                                </div>
+                            </div>
+                            {data.scheduled_at !== '' && (
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tanggal Rilis</label>
+                                    <input type="datetime-local" value={data.scheduled_at} onChange={(e) => setData('scheduled_at', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-sand-200 text-sm font-semibold focus:border-teal-500 outline-none" />
+                                </div>
+                            )}
+                            {!data.published && !data.scheduled_at && (
+                                <div className="flex items-center text-xs text-teal-600 font-semibold">
+                                    <span>Modul akan disimpan sebagai draft. Kamu bisa publikasikan nanti dari halaman daftar modul.</span>
+                                </div>
                             )}
                         </div>
 

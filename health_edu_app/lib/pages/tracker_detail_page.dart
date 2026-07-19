@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/toast_helper.dart';
 import '../utils/time_helper.dart';
 import '../utils/ai_service.dart';
@@ -75,6 +76,18 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
 
     _fetchUserProfile().then((_) {
       _fetchLoggedDates();
+    });
+
+    // Mood toast on first open (once per day)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final u = Supabase.instance.client.auth.currentUser;
+      if (u == null) return;
+      final prefs = await SharedPreferences.getInstance();
+      final today = DateTime.now().toIso8601String().split('T')[0];
+      if (prefs.getString('mood_seen_date') != today && _hasMenstruated != false) {
+        _showMoodDialog(u);
+        await prefs.setString('mood_seen_date', today);
+      }
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1204,6 +1217,63 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
     );
   }
 
+
+  void _showMoodDialog(User u) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Bagaimana Moodmu Hari Ini?', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+              _moodOption(ctx, 'Senang', Icons.sentiment_very_satisfied_rounded, Colors.green, 'Tetap semangat dan sebarkan energi positif!', u),
+              _moodOption(ctx, 'Biasa', Icons.sentiment_satisfied_rounded, Colors.blue, 'Hari yang netral itu wajar, nikmati saja.', u),
+              _moodOption(ctx, 'Sensitif', Icons.sentiment_neutral_rounded, Colors.orange, 'Tenang, luangkan waktu untuk diri sendiri.', u),
+            ]),
+            const SizedBox(height: 16),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+              _moodOption(ctx, 'Sedih', Icons.sentiment_dissatisfied_rounded, Colors.purple, 'Menangis itu sehat, lepaskan semua bebanmu.', u),
+              _moodOption(ctx, 'Lelah', Icons.sentiment_very_dissatisfied_rounded, Colors.red, 'Istirahat yang cukup, tubuhmu butuh recovery.', u),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _moodOption(BuildContext dialogCtx, String label, IconData icon, Color color, String response, User u) {
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    return GestureDetector(
+      onTap: () async {
+        await Supabase.instance.client.from('daily_logs').upsert({
+          'user_id': u.id,
+          'log_date': todayStr,
+          'mood': label,
+        }, onConflict: 'user_id,log_date');
+        if (mounted) {
+          Navigator.pop(dialogCtx);
+          ToastHelper.showSuccess(context, 'Mood "$label" telah dicatat! $response');
+        }
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 52, height: 52,
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withValues(alpha: 0.3))),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(height: 6),
+          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBottomPanel() {
     if (_hasMenstruated == false && !_isEditing) {
       return Column(
@@ -1405,6 +1475,9 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
                   ),
                 ),
 
+              // Mood & Symptom Journal — Recent 7 days
+              _buildMoodJournalBar(),
+
               Expanded(
                 child: ListView.builder(
                   controller: _scrollController,
@@ -1463,5 +1536,77 @@ class _TrackerDetailPageState extends State<TrackerDetailPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildMoodJournalBar() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _fetchRecentMoods(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox(height: 8);
+        final moods = snapshot.data!;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Catatan Mood (7 hari terakhir)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 40,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: moods.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemBuilder: (context, index) {
+                    final mood = moods[index]['mood'] as String? ?? '';
+                    final date = (moods[index]['log_date'] as String? ?? '').substring(5);
+                    final moodIcon = _moodIcon(mood);
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(moodIcon, size: 16, color: const Color(0xFF8B5CF6)),
+                          const SizedBox(width: 4),
+                          Text(date, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  IconData _moodIcon(String mood) {
+    switch (mood.toLowerCase()) {
+      case 'senang': case 'bahagia': case 'happy': return Icons.sentiment_satisfied_rounded;
+      case 'sedih': case 'sad': return Icons.sentiment_dissatisfied_rounded;
+      case 'cemas': case 'cemas/stres': case 'anxious': return Icons.sentiment_neutral_rounded;
+      case 'marah': case 'angry': return Icons.mood_bad_rounded;
+      case 'sensitif': return Icons.sentiment_neutral_rounded;
+      default: return Icons.sentiment_satisfied_rounded;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchRecentMoods() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return [];
+    final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7)).toIso8601String().split('T')[0];
+    try {
+      final res = await Supabase.instance.client
+          .from('daily_logs')
+          .select('log_date, mood, symptoms')
+          .eq('user_id', user.id)
+          .gte('log_date', sevenDaysAgo)
+          .order('log_date', ascending: false)
+          .limit(7);
+      return List<Map<String, dynamic>>.from(res);
+    } catch (_) { return []; }
   }
 }
