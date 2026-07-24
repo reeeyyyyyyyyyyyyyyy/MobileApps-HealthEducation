@@ -77,6 +77,7 @@ Route::prefix('admin')->middleware('auth')->group(function () {
     // Learning Paths
     Route::get('paths', [PathController::class, 'index'])->name('admin.paths.index');
     Route::post('paths', [PathController::class, 'store'])->name('admin.paths.store');
+    Route::post('paths/reorder', [PathController::class, 'reorder'])->name('admin.paths.reorder');
     Route::put('paths/{id}/order', [PathController::class, 'updateOrder'])->name('admin.paths.update-order');
     Route::delete('paths/{id}', [PathController::class, 'destroy'])->name('admin.paths.destroy');
 

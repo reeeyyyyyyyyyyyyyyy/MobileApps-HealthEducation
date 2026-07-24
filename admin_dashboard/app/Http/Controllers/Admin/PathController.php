@@ -3,15 +3,16 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\LearningPath;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 class PathController extends Controller
 {
     public function index()
     {
-        $paths = DB::table('learning_paths')->orderBy('sort_order')->get();
+        $paths = LearningPath::ordered()->get();
         $assignedModuleIds = DB::table('learning_path_modules')->pluck('module_id')->unique()->toArray();
         $modules = DB::table('modules')
             ->where('published', 1)
@@ -37,18 +38,16 @@ class PathController extends Controller
             'module_ids.*' => 'exists:modules,id',
         ]);
 
-        $sortOrder = DB::table('learning_paths')->max('sort_order') + 1;
-        $pathId = DB::table('learning_paths')->insertGetId([
+        $path = LearningPath::create([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? '',
             'icon' => $validated['icon'] ?? 'route',
-            'sort_order' => $sortOrder,
         ]);
 
         if (!empty($validated['module_ids'])) {
             $data = [];
             foreach ($validated['module_ids'] as $i => $modId) {
-                $data[] = ['path_id' => $pathId, 'module_id' => $modId, 'sort_order' => $i];
+                $data[] = ['path_id' => $path->id, 'module_id' => $modId, 'sort_order' => $i];
             }
             DB::table('learning_path_modules')->insert($data);
         }
@@ -58,18 +57,23 @@ class PathController extends Controller
 
     public function updateOrder(Request $request, $id)
     {
-        $direction = $request->input('direction');
-        $current = DB::table('learning_paths')->where('id', $id)->first();
-        if (!$current) return back();
+        $id = (string) $id;
+        if (!str_contains($id, '-')) {
+            return back()->with('error', 'ID path tidak valid');
+        }
 
+        $path = DB::table('learning_paths')->where('id', $id)->first();
+        if (!$path) return back()->with('error', 'Path tidak ditemukan');
+
+        $direction = $request->input('direction');
         $swap = $direction === 'up'
-            ? DB::table('learning_paths')->where('sort_order', '<', $current->sort_order)->orderBy('sort_order', 'desc')->first()
-            : DB::table('learning_paths')->where('sort_order', '>', $current->sort_order)->orderBy('sort_order', 'asc')->first();
+            ? DB::table('learning_paths')->where('sort_order', '<', $path->sort_order)->orderBy('sort_order', 'desc')->first()
+            : DB::table('learning_paths')->where('sort_order', '>', $path->sort_order)->orderBy('sort_order', 'asc')->first();
 
         if (!$swap) return back();
 
-        DB::table('learning_paths')->where('id', $current->id)->update(['sort_order' => $swap->sort_order]);
-        DB::table('learning_paths')->where('id', $swap->id)->update(['sort_order' => $current->sort_order]);
+        DB::table('learning_paths')->where('id', $path->id)->update(['sort_order' => $swap->sort_order]);
+        DB::table('learning_paths')->where('id', $swap->id)->update(['sort_order' => $path->sort_order]);
 
         return back()->with('success', 'Urutan path berhasil diubah!');
     }

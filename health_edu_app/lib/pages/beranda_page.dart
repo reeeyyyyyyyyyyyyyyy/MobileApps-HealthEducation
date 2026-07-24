@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
@@ -69,58 +68,6 @@ class _BerandaPageState extends State<BerandaPage> {
     _loadPopularModules();
     _fetchProfile();
     _checkAndShowTip();
-    _startModulePolling();
-  }
-
-  Timer? _modulePollTimer;
-
-  void _startModulePolling() {
-    _modulePollTimer?.cancel();
-    _modulePollTimer = Timer.periodic(const Duration(seconds: 60), (_) => _checkNewModule());
-  }
-
-  Future<void> _checkNewModule() async {
-    if (!mounted) return;
-    try {
-      final today = DateTime.now().toIso8601String().split('T')[0];
-      final res = await Supabase.instance.client
-          .from('modules')
-          .select('id, title')
-          .eq('published', 1)
-          .gte('created_at', today)
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
-      if (res == null) return;
-
-      final seenKey = 'notif_module_${res['id']}';
-      final prefs = await SharedPreferences.getInstance();
-      if (prefs.getBool(seenKey) == true) return;
-
-      await prefs.setBool(seenKey, true);
-
-      // Find path name
-      String pathName = 'Modul Mandiri';
-      try {
-        final pm = await Supabase.instance.client
-            .from('learning_path_modules')
-            .select('path_id')
-            .eq('module_id', res['id'])
-            .maybeSingle();
-        if (pm != null) {
-          final p = await Supabase.instance.client
-              .from('learning_paths')
-              .select('title')
-              .eq('id', pm['path_id'])
-              .maybeSingle();
-          if (p != null) pathName = p['title'];
-        }
-      } catch (_) {}
-
-      if (mounted) {
-        ToastHelper.showSuccess(context, 'Modul Baru!\n${res['title']} pada learning path "$pathName" telah tersedia!');
-      }
-    } catch (_) {}
   }
 
   Future<void> _checkAndShowTip() async {

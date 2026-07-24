@@ -36,29 +36,39 @@ class _BelajarPageState extends State<BelajarPage> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final pr = await Supabase.instance.client.from('learning_paths').select().order('sort_order');
+      final pr = await Supabase.instance.client.from('learning_paths').select().order('sort_order', ascending: true);
       _paths = List<Map<String, dynamic>>.from(pr);
-      final pmr = await Supabase.instance.client.from('learning_path_modules').select().order('sort_order');
+      final pmr = await Supabase.instance.client.from('learning_path_modules').select().order('sort_order', ascending: true);
       _pathModules = List<Map<String, dynamic>>.from(pmr);
       final am = await Supabase.instance.client.from('modules').select().eq('published', 1);
+      _mc.clear();
       for (final m in am) _mc[m['id']] = Map<String, dynamic>.from(m);
       final prefs = await SharedPreferences.getInstance();
       _completedIds = (prefs.getStringList('completed_modules_list') ?? []).toSet();
 
+      _currentPathIdx = 0;
       for (int i = 0; i < (_paths?.length ?? 0); i++) {
         final pm = _pathModules!.where((x) => x['path_id'] == _paths![i]['id']).toList();
-        if (pm.any((x) => !_completedIds.contains(x['module_id']))) { _currentPathIdx = i; break; }
-        _currentPathIdx = i;
+        final publishedMods = pm.where((x) => _mc.containsKey(x['module_id'])).toList();
+        if (publishedMods.isNotEmpty && publishedMods.any((x) => !_completedIds.contains(x['module_id']))) {
+          _currentPathIdx = i;
+          break;
+        }
       }
-      _expanded = {_paths![_currentPathIdx]['id']};
+      if (_paths != null && _paths!.isNotEmpty) {
+        _expanded = {_paths![_currentPathIdx]['id']};
+      }
     } catch (e) { debugPrint('$e'); }
     if (mounted) setState(() => _loading = false);
   }
 
   bool _isUnlocked(int idx) {
+    if (idx == 0) return true; // Path urutan 1 selalu terbuka
     for (int i = 0; i < idx; i++) {
-      final pm = _pathModules!.where((x) => x['path_id'] == _paths![i]['id']).toList();
-      if (pm.any((x) => !_completedIds.contains(x['module_id']))) return false;
+      final pms = _pathModules!.where((x) => x['path_id'] == _paths![i]['id']).toList();
+      final publishedPms = pms.where((x) => _mc.containsKey(x['module_id'])).toList();
+      if (publishedPms.isEmpty) continue;
+      if (publishedPms.any((x) => !_completedIds.contains(x['module_id']))) return false;
     }
     return true;
   }
@@ -167,8 +177,10 @@ class _BelajarPageState extends State<BelajarPage> {
       final pid = path['id'] as String;
       final unlocked = _isUnlocked(pi);
       final pms = _pathModules!.where((x) => x['path_id'] == pid).toList();
-      final total = pms.length;
-      final done = pms.where((x) => _completedIds.contains(x['module_id'])).length;
+      // Hanya modul published yang dihitung
+      final publishedPms = pms.where((x) => _mc.containsKey(x['module_id'])).toList();
+      final total = publishedPms.length;
+      final done = publishedPms.where((x) => _completedIds.contains(x['module_id'])).length;
       final isCurrent = pi == _currentPathIdx;
       final isExpanded = _expanded.contains(pid);
 
@@ -228,7 +240,7 @@ class _BelajarPageState extends State<BelajarPage> {
             // Expanded modules
             if (isExpanded) ...[
               const Divider(height: 1, color: Color(0xFFF1F5F9)),
-              ...pms.map((pm) {
+              ...publishedPms.map((pm) {
                 final mod = _mc[pm['module_id']];
                 if (mod == null) return const SizedBox();
                 final d = _completedIds.contains(mod['id']);

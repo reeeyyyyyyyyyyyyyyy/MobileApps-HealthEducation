@@ -6,7 +6,7 @@ import { ArrowLeft, Save, Video, AlertCircle, Upload } from 'lucide-react';
 import IconPicker from '@/Components/UI/IconPicker';
 import RichTextEditor from '@/Components/UI/RichTextEditor';
 
-export default function Form({ module, categories, learningPaths }) {
+export default function Form({ module, categories, learningPaths, assignedPathId }) {
     const isEdit = !!module;
     const { error } = useToast();
     const [showConfirm, setShowConfirm] = useState(false);
@@ -20,9 +20,9 @@ export default function Form({ module, categories, learningPaths }) {
         icon_name: module?.icon_name || 'psychology_rounded',
         video_url: module?.video_url || '',
         content: module?.content || uploadResult?.content || '',
-        published: true,
-        scheduled_at: '',
-        path_id: 'none',
+        published: module ? !!module.published : true,
+        scheduled_at: module?.scheduled_at || '',
+        path_id: assignedPathId || 'none',
     });
 
     const handleSubmit = (e) => {

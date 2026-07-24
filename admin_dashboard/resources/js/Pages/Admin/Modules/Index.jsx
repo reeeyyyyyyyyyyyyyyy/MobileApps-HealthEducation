@@ -42,6 +42,8 @@ export default function Index({ modules, filters }) {
     const query = {};
     if (search) query.search = search;
     if (category) query.category = category;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('page')) query.page = params.get('page');
 
     const timer = setTimeout(() => {
       router.get('/admin/modules', query, { preserveState: true, replace: true });
