@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../theme/uticare_theme.dart';
 import '../main.dart';
 import '../utils/toast_helper.dart';
 import 'complete_google_signup_page.dart';
-import 'setup_tracker_page.dart';
+import 'pretest_page.dart';
 
 class OtpVerificationPage extends StatefulWidget {
   final String email;
@@ -24,11 +25,6 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
   final _otpController = TextEditingController();
   bool _isLoading = false;
 
-  // === Design System Colors ===
-  static const Color primaryColor = Color(0xFF8B5CF6);
-  static const Color textPrimary = Color(0xFF1E293B);
-  static const Color textSecondary = Color(0xFF64748B);
-
   @override
   void dispose() {
     _otpController.dispose();
@@ -38,18 +34,16 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
   Future<void> _handleVerifyOtp() async {
     final otpCode = _otpController.text.trim();
 
-    if (otpCode.length != 8) {
-      ToastHelper.showError(context, 'Masukkan 8 digit kode OTP');
+    if (otpCode.length < 6) {
+      ToastHelper.showError(context, 'Masukkan kode OTP yang valid');
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       if (!isSupabaseInitialized) {
-        throw Exception("Supabase is not initialized.");
+        throw Exception("Supabase belum diinisialisasi.");
       }
 
       await Supabase.instance.client.auth.verifyOTP(
@@ -60,7 +54,6 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
 
       final currentUser = Supabase.instance.client.auth.currentUser;
       if (currentUser != null) {
-        // Ambil profil dari database
         final profile = await Supabase.instance.client
             .from('profiles')
             .select('full_name')
@@ -71,7 +64,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
 
         if (widget.isGoogleSignUp && (fullName == null || fullName.trim().isEmpty)) {
           if (mounted) {
-            ToastHelper.showSuccess(context, 'Verifikasi Berhasil! Silakan lengkapi profil Anda.');
+            ToastHelper.showSuccess(context, 'Verifikasi Berhasil! Lengkapi profil.');
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -84,10 +77,10 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
       }
 
       if (mounted) {
-        ToastHelper.showSuccess(context, 'Verifikasi Berhasil! Selamat datang di BloomFem.');
+        ToastHelper.showSuccess(context, 'Verifikasi Berhasil! Selamat datang di UtiCare.');
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => const SetupTrackerPage()),
+          MaterialPageRoute(builder: (context) => const PretestPage()),
           (route) => false,
         );
       }
@@ -102,21 +95,17 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
 
   Future<void> _handleResendOtp() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       if (!isSupabaseInitialized) {
-        throw Exception("Supabase is not initialized.");
+        throw Exception("Supabase belum diinisialisasi.");
       }
 
       if (widget.isGoogleSignUp) {
@@ -143,9 +132,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -153,12 +140,10 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: UtiCareTheme.background,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: textPrimary),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -170,17 +155,16 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
             children: [
               const SizedBox(height: 20),
 
-              // Ikon amplop besar
               Center(
                 child: Container(
-                  width: 90,
-                  height: 90,
+                  width: 80,
+                  height: 80,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEDE9FE),
+                    color: UtiCareTheme.primarySubtle,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: primaryColor.withValues(alpha: 0.15),
+                        color: UtiCareTheme.primary.withValues(alpha: 0.15),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -188,81 +172,34 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                   ),
                   child: const Icon(
                     Icons.mark_email_read_rounded,
-                    size: 44,
-                    color: primaryColor,
+                    size: 40,
+                    color: UtiCareTheme.primary,
                   ),
                 ),
               ),
               const SizedBox(height: 28),
 
-              // Header
               const Text(
                 'Verifikasi Email',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: textPrimary,
-                ),
+                style: UtiCareTheme.heading2,
               ),
               const SizedBox(height: 10),
 
-              // Sub-description
               const Text(
-                'Masukkan 8 digit kode OTP yang telah dikirim ke:',
+                'Masukkan kode OTP yang telah dikirim ke:',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: textSecondary,
-                  height: 1.4,
-                ),
+                style: UtiCareTheme.body,
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 widget.email,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: primaryColor,
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Info card: cek email
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
-                  ),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      color: Color(0xFFF59E0B),
-                      size: 22,
-                    ),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Cek kotak masuk email kamu. Jika tidak ditemukan, periksa juga folder Spam.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF92400E),
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                style: UtiCareTheme.bodyBold.copyWith(color: UtiCareTheme.primary),
               ),
               const SizedBox(height: 28),
 
-              // OTP Input Field
+              // OTP Field
               TextFormField(
                 controller: _otpController,
                 keyboardType: TextInputType.number,
@@ -274,89 +211,39 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: textPrimary,
+                  color: UtiCareTheme.textPrimary,
                   letterSpacing: 8,
                 ),
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   counterText: '',
                   hintText: '••••••••',
-                  hintStyle: TextStyle(
-                    fontSize: 24,
-                    color: const Color(0xFF64748B).withValues(alpha: 0.4),
-                    letterSpacing: 8,
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: 20,
-                    horizontal: 24,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: primaryColor, width: 2),
-                  ),
                 ),
               ),
               const SizedBox(height: 28),
 
-              // Tombol Verifikasi
+              // Button Verifikasi
               ElevatedButton(
                 onPressed: _isLoading ? null : _handleVerifyOtp,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 2,
-                  shadowColor: primaryColor.withValues(alpha: 0.4),
-                ),
                 child: _isLoading
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                       )
-                    : const Text(
-                        'Verifikasi Akun',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
+                    : const Text('Verifikasi Akun'),
               ),
               const SizedBox(height: 24),
 
-              // Link kirim ulang
+              // Resend OTP
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
-                    'Belum menerima kode? ',
-                    style: TextStyle(fontSize: 14, color: textSecondary),
-                  ),
+                  const Text('Belum menerima kode? ', style: UtiCareTheme.body),
                   GestureDetector(
                     onTap: _isLoading ? null : _handleResendOtp,
-                    child: const Text(
+                    child: Text(
                       'Kirim Ulang',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: primaryColor,
-                      ),
+                      style: UtiCareTheme.bodyBold.copyWith(color: UtiCareTheme.primary),
                     ),
                   ),
                 ],

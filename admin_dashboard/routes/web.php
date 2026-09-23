@@ -3,86 +3,79 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\ModuleController;
-use App\Http\Controllers\Admin\QuizController;
-use App\Http\Controllers\Admin\ReportController;
-use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Admin\PathController;
-use App\Http\Controllers\Admin\AnnouncementController;
-use App\Http\Controllers\Admin\UploadController;
+use App\Http\Controllers\Admin\RespondentController;
+use App\Http\Controllers\Admin\EducationMaterialController;
+use App\Http\Controllers\Admin\CheckRiskController;
+use App\Http\Controllers\Admin\ReminderTemplateController;
+use App\Http\Controllers\Admin\SurveyInstrumentController;
 use App\Http\Controllers\Admin\TipController;
 use Inertia\Inertia;
 
-// Welcome Page
+// Landing / Redirect
 Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'laravelVersion' => app()->version(),
-        'phpVersion' => PHP_VERSION,
-    ]);
+    return redirect()->route('admin.dashboard');
 });
 
-// Public tip endpoint for Flutter (no auth required)
-Route::get('/api/tips/today', [TipController::class, 'today']);
-
-// Admin routes with auth
+// Admin Auth
 Route::get('/admin/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/admin/login', [LoginController::class, 'login']);
 Route::post('/admin/logout', [LoginController::class, 'logout'])->name('logout');
 
 // Authenticated Admin Routes
 Route::prefix('admin')->middleware('auth')->group(function () {
+    // Dashboard
     Route::get('/', [DashboardController::class, 'index'])->name('admin.dashboard');
 
-    // Modules CRUD
-    Route::resource('modules', ModuleController::class)->names([
-        'index' => 'admin.modules.index',
-        'create' => 'admin.modules.create',
-        'store' => 'admin.modules.store',
-        'edit' => 'admin.modules.edit',
-        'update' => 'admin.modules.update',
-        'destroy' => 'admin.modules.destroy',
+    // Responden Penelitian
+    Route::get('respondents/export', [RespondentController::class, 'export'])->name('admin.respondents.export');
+    Route::get('respondents', [RespondentController::class, 'index'])->name('admin.respondents.index');
+    Route::get('respondents/{id}', [RespondentController::class, 'show'])->name('admin.respondents.show');
+
+    // Materi Edukasi ISK (HBM)
+    Route::resource('education', EducationMaterialController::class)->names([
+        'index' => 'admin.education.index',
+        'create' => 'admin.education.create',
+        'store' => 'admin.education.store',
+        'edit' => 'admin.education.edit',
+        'update' => 'admin.education.update',
+        'destroy' => 'admin.education.destroy',
     ]);
-    Route::put('modules/{module}/publish', [ModuleController::class, 'publish'])->name('admin.modules.publish');
+    Route::put('education/{education}/publish', [EducationMaterialController::class, 'togglePublish'])->name('admin.education.publish');
 
-    // Quizzes CRUD
-    Route::resource('quizzes', QuizController::class)->names([
-        'index' => 'admin.quizzes.index',
-        'create' => 'admin.quizzes.create',
-        'store' => 'admin.quizzes.store',
-        'edit' => 'admin.quizzes.edit',
-        'update' => 'admin.quizzes.update',
-        'destroy' => 'admin.quizzes.destroy',
+    // Skrining Risiko ISK (Check Risk)
+    Route::resource('check-risk', CheckRiskController::class)->names([
+        'index' => 'admin.check-risk.index',
+        'create' => 'admin.check-risk.create',
+        'store' => 'admin.check-risk.store',
+        'edit' => 'admin.check-risk.edit',
+        'update' => 'admin.check-risk.update',
+        'destroy' => 'admin.check-risk.destroy',
     ]);
 
-    // Reports Moderation
-    Route::get('reports', [ReportController::class, 'index'])->name('admin.reports.index');
-    Route::post('reports/{report}/delete-content', [ReportController::class, 'deleteContent'])->name('admin.reports.delete-content');
-    Route::get('reports/export', [ReportController::class, 'export'])->name('admin.reports.export');
+    // Template Pengingat Kebiasaan
+    Route::resource('reminders', ReminderTemplateController::class)->names([
+        'index' => 'admin.reminders.index',
+        'create' => 'admin.reminders.create',
+        'store' => 'admin.reminders.store',
+        'edit' => 'admin.reminders.edit',
+        'update' => 'admin.reminders.update',
+        'destroy' => 'admin.reminders.destroy',
+    ]);
 
-    // Users Progress
-    Route::get('users', [UserController::class, 'index'])->name('admin.users.index');
-    Route::get('users/export', [UserController::class, 'export'])->name('admin.users.export');
+    // Instrumen Kuesioner (Pre-test & Post-test)
+    Route::resource('survey', SurveyInstrumentController::class)->names([
+        'index' => 'admin.survey.index',
+        'create' => 'admin.survey.create',
+        'store' => 'admin.survey.store',
+        'edit' => 'admin.survey.edit',
+        'update' => 'admin.survey.update',
+        'destroy' => 'admin.survey.destroy',
+    ]);
 
-    // Upload & Parse
-    Route::post('upload/parse', [UploadController::class, 'parse'])->name('admin.upload.parse');
-    Route::post('upload/store-questions', [UploadController::class, 'storeQuestions'])->name('admin.upload.store-questions');
-
-    // Daily Tips
+    // Tips Harian Pencegahan ISK
     Route::get('tips', [TipController::class, 'index'])->name('admin.tips.index');
     Route::post('tips', [TipController::class, 'store'])->name('admin.tips.store');
     Route::post('tips/generate', [TipController::class, 'generate'])->name('admin.tips.generate');
     Route::put('tips/{tip}', [TipController::class, 'update'])->name('admin.tips.update');
     Route::delete('tips/{tip}', [TipController::class, 'destroy'])->name('admin.tips.destroy');
-
-    // Learning Paths
-    Route::get('paths', [PathController::class, 'index'])->name('admin.paths.index');
-    Route::post('paths', [PathController::class, 'store'])->name('admin.paths.store');
-    Route::post('paths/reorder', [PathController::class, 'reorder'])->name('admin.paths.reorder');
-    Route::put('paths/{id}/order', [PathController::class, 'updateOrder'])->name('admin.paths.update-order');
-    Route::delete('paths/{id}', [PathController::class, 'destroy'])->name('admin.paths.destroy');
-
-    // Announcements
-    Route::get('announcements', [AnnouncementController::class, 'index'])->name('admin.announcements.index');
-    Route::post('announcements', [AnnouncementController::class, 'store'])->name('admin.announcements.store');
-    Route::delete('announcements/{id}', [AnnouncementController::class, 'destroy'])->name('admin.announcements.destroy');
 });

@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:async';
+import 'theme/uticare_theme.dart';
 import 'pages/beranda_page.dart';
-import 'pages/belajar_page.dart';
-import 'pages/kuis_page.dart';
-import 'pages/komunitas_page.dart';
+import 'pages/edukasi_page.dart';
+import 'pages/check_risk_page.dart';
+import 'pages/pengingat_page.dart';
 import 'pages/profil_page.dart';
 import 'pages/splash_page.dart';
-import 'utils/toast_helper.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Helper to check if Supabase is successfully initialized
@@ -23,43 +21,37 @@ bool get isSupabaseInitialized {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
     debugPrint('Failed to load env: $e');
   }
-  
+
   try {
-    // Attempt initialization with config credentials
     await Supabase.initialize(
-      url: 'https://yxlupfucivdogmqvhzho.supabase.co',
-      publishableKey: 'sb_publishable_rJjtSnKe_ZhiDm8jtjHzmQ_EFRMHkP9',
+      url: dotenv.env['SUPABASE_URL'] ?? 'https://lvvftnvgdwdkoyxjskkj.supabase.co',
+      publishableKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
     );
   } catch (e) {
     debugPrint('Supabase initialization failed: $e');
   }
 
-  runApp(const HealthEduApp());
+  runApp(const UtiCareApp());
 }
 
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
-class HealthEduApp extends StatelessWidget {
-  const HealthEduApp({super.key});
+class UtiCareApp extends StatelessWidget {
+  const UtiCareApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: appNavigatorKey,
-      title: 'BloomFem',
+      title: 'UtiCare',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF8B5CF6),
-        ),
-        useMaterial3: true,
-      ),
+      theme: UtiCareTheme.themeData,
       home: const SplashPage(),
     );
   }
@@ -78,84 +70,6 @@ class MainScreen extends StatefulWidget {
 
 class MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
-  Timer? _modulePollTimer;
-  RealtimeChannel? _moduleRealtimeChannel;
-
-  @override
-  void initState() {
-    super.initState();
-    _startModulePolling();
-    _subscribeRealtime();
-  }
-
-  @override
-  void dispose() {
-    _modulePollTimer?.cancel();
-    if (_moduleRealtimeChannel != null) {
-      Supabase.instance.client.removeChannel(_moduleRealtimeChannel!);
-    }
-    super.dispose();
-  }
-
-  void _subscribeRealtime() {
-    try {
-      _moduleRealtimeChannel = Supabase.instance.client.channel('public:modules');
-      _moduleRealtimeChannel?.onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'modules',
-        callback: (payload) {
-          _checkNewModule();
-        },
-      ).subscribe();
-    } catch (e) {
-      debugPrint('Realtime channel error: $e');
-    }
-  }
-
-  void _startModulePolling() {
-    _modulePollTimer?.cancel();
-    // Check immediately and poll every 15 seconds for new scheduled/published modules
-    _checkNewModule();
-    _modulePollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      _checkNewModule();
-    });
-  }
-
-  Future<void> _checkNewModule() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final res = await Supabase.instance.client
-          .from('modules')
-          .select('id, title')
-          .eq('published', 1)
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
-      if (res == null) return;
-      final seenKey = 'notif_module_${res['id']}';
-      if (prefs.getBool(seenKey) == true) return;
-      await prefs.setBool(seenKey, true);
-
-      String pathName = 'Modul Mandiri';
-      try {
-        final pm = await Supabase.instance.client
-            .from('learning_path_modules').select('path_id').eq('module_id', res['id']).maybeSingle();
-        if (pm != null) {
-          final p = await Supabase.instance.client
-              .from('learning_paths').select('title').eq('id', pm['path_id']).maybeSingle();
-          if (p != null) pathName = p['title'];
-        }
-      } catch (_) {}
-
-      final navContext = appNavigatorKey.currentContext ?? context;
-      if (navContext.mounted) {
-        ToastHelper.showSuccess(navContext, 'Modul Baru!\n${res['title']} pada learning path "$pathName" telah tersedia!');
-      }
-    } catch (_) {}
-  }
 
   void navigateToPage(int index) {
     setState(() {
@@ -173,27 +87,65 @@ class MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final List<Widget> pages = <Widget>[
       const BerandaPage(),
-      const BelajarPage(),
-      const KuisPage(),
-      const KomunitasPage(),
+      const EdukasiPage(),
+      const CheckRiskPage(),
+      const PengingatPage(),
       const ProfilPage(),
     ];
 
     return Scaffold(
       body: pages.elementAt(_selectedIndex),
-      bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Beranda'),
-          BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Belajar'),
-          BottomNavigationBarItem(icon: Icon(Icons.quiz), label: 'Kuis'),
-          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Komunitas'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: const Color(0xFF8B5CF6),
-        unselectedItemColor: Colors.grey,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed, // Agar semua menu tampil meski lebih dari 3
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: UtiCareTheme.surface,
+          boxShadow: [
+            BoxShadow(
+              color: UtiCareTheme.primary.withValues(alpha: 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          items: const <BottomNavigationBarItem>[
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_rounded),
+              activeIcon: Icon(Icons.home_rounded),
+              label: 'Beranda',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.menu_book_rounded),
+              activeIcon: Icon(Icons.menu_book_rounded),
+              label: 'Edukasi',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.fact_check_rounded),
+              activeIcon: Icon(Icons.fact_check_rounded),
+              label: 'Check Risk',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.notifications_rounded),
+              activeIcon: Icon(Icons.notifications_rounded),
+              label: 'Pengingat',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_rounded),
+              activeIcon: Icon(Icons.person_rounded),
+              label: 'Profil',
+            ),
+          ],
+          currentIndex: _selectedIndex,
+          selectedItemColor: UtiCareTheme.primary,
+          unselectedItemColor: UtiCareTheme.textTertiary,
+          onTap: _onItemTapped,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          selectedFontSize: 11,
+          unselectedFontSize: 11,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500),
+        ),
       ),
     );
   }

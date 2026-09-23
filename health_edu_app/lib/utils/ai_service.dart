@@ -3,19 +3,18 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'time_helper.dart';
 
 class AIService {
-  static Future<String> analyzePeriod(int durationDays, List<String> symptoms) async {
+  /// Analyze risk check result and provide personalized recommendation
+  static Future<String> analyzeRiskResult(int totalScore, int maxScore, String riskLevel) async {
     final apiKey = dotenv.env['OPENAI_API_KEY'];
     if (apiKey == null || apiKey.isEmpty) {
-      debugPrint('OpenAI API Key is missing. Falling back to static message.');
-      return _getStaticFallbackMessage(durationDays);
+      return _getStaticRiskMessage(riskLevel);
     }
 
-    final symptomsText = symptoms.isEmpty ? 'tidak ada gejala tercatat' : symptoms.join(', ');
-
-    final prompt = 'Pengguna baru saja selesai haid dengan durasi $durationDays hari, dengan gejala: $symptomsText.';
+    final prompt = 'Pengguna remaja putri baru saja melakukan check risiko ISK. '
+        'Skor: $totalScore dari $maxScore. Level risiko: $riskLevel. '
+        'Berikan rekomendasi personal 3-4 kalimat.';
 
     try {
       final response = await http.post(
@@ -29,17 +28,14 @@ class AIService {
           'messages': [
             {
               'role': 'system',
-              'content': 'Kamu adalah asisten kesehatan reproduksi remaja yang ramah bernama BloomFem AI. '
-                  'Berikan analisis medis ringan, menenangkan, maksimal 3 kalimat pendek. '
-                  'Jangan berikan diagnosis berat, sarankan ke dokter jika durasi <2 hari atau >8 hari.'
+              'content': 'Kamu adalah Suster Care, asisten kesehatan ISK (Infeksi Saluran Kemih) '
+                  'untuk remaja putri. Berikan rekomendasi medis ringan, menenangkan, dan edukatif. '
+                  'Maksimal 4 kalimat pendek. Jangan diagnosis berat.'
             },
-            {
-              'role': 'user',
-              'content': prompt,
-            }
+            {'role': 'user', 'content': prompt}
           ],
           'temperature': 0.7,
-          'max_tokens': 150,
+          'max_tokens': 200,
         }),
       ).timeout(const Duration(seconds: 8));
 
@@ -49,138 +45,140 @@ class AIService {
         if (content != null && content.trim().isNotEmpty) {
           return content.trim();
         }
-      } else {
-        debugPrint('OpenAI API Error: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
-      debugPrint('Failed to fetch AI analysis: $e');
+      debugPrint('AI risk analysis error: $e');
     }
 
-    return _getStaticFallbackMessage(durationDays);
+    return _getStaticRiskMessage(riskLevel);
   }
 
-  static String _getStaticFallbackMessage(int durationDays) {
-    if (durationDays < 2 || durationDays > 8) {
-      return 'Durasi haidmu kali ini adalah $durationDays hari. ⚠️ Durasi di bawah 2 hari atau di atas 8 hari bisa menjadi tanda ketidakseimbangan hormon atau hal lain pada remaja. Disarankan untuk berkonsultasi dengan dokter untuk memastikan kesehatanmu ya, Bloom! 🌸';
+  static String _getStaticRiskMessage(String riskLevel) {
+    switch (riskLevel.toLowerCase()) {
+      case 'rendah':
+        return 'Hasil menunjukkan risiko ISK kamu rendah. Kamu sudah menjaga '
+            'kebiasaan sehat dengan baik! Tetap pertahankan pola minum air '
+            'yang cukup dan kebersihan area genital.';
+      case 'sedang':
+        return 'Risiko ISK kamu berada di level sedang. Perhatikan konsumsi air putihmu '
+            'dan hindari menahan BAK terlalu lama. Tingkatkan kebersihan area genital '
+            'dengan cara membersihkan dari depan ke belakang.';
+      case 'tinggi':
+        return 'Risiko ISK kamu cukup tinggi. Segera perbaiki kebiasaan harianmu: '
+            'minum minimal 8 gelas air per hari, jangan menahan BAK, dan jaga '
+            'kebersihan area genital. Disarankan konsultasi ke tenaga kesehatan.';
+      default:
+        return 'Terus pantau kesehatanmu dan lakukan check risk secara berkala.';
     }
-    return 'Durasi haidmu kali ini adalah $durationDays hari. 💡 Info Medis: Siklus haid normal bagi remaja biasanya berlangsung selama 3 hingga 7 hari. Durasi haidmu kali ini berada dalam batas normal. Jaga kesehatan reproduksimu selalu ya! 🌸';
   }
 
-  static Future<Map<String, dynamic>?> _getUserProfile() async {
+  /// Generate daily tip about ISK prevention
+  static Future<String> generateDailyTip() async {
+    final apiKey = dotenv.env['OPENAI_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      return 'Minum air putih minimal 8 gelas per hari untuk menjaga kesehatan saluran kemihmu.';
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://api.openai.com/v1/chat/completions'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $apiKey',
+        },
+        body: jsonEncode({
+          'model': 'gpt-3.5-turbo',
+          'messages': [
+            {
+              'role': 'system',
+              'content': 'Generate 1 tips kesehatan harian tentang pencegahan ISK untuk remaja putri. '
+                  'Singkat, 1-2 kalimat, mudah dipahami, bernada positif.'
+            },
+            {'role': 'user', 'content': 'Berikan 1 tips pencegahan ISK hari ini.'}
+          ],
+          'temperature': 0.9,
+          'max_tokens': 100,
+        }),
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final content = data['choices'][0]['message']['content'] as String?;
+        if (content != null && content.trim().isNotEmpty) {
+          return content.trim();
+        }
+      }
+    } catch (e) {
+      debugPrint('AI daily tip error: $e');
+    }
+
+    return 'Jangan menahan keinginan buang air kecil terlalu lama. '
+        'Kebiasaan ini dapat meningkatkan risiko bakteri berkembang di saluran kemih.';
+  }
+
+  /// Chat with AI as "Suster Care" - ISK health assistant
+  static Future<String> chatWithAI(List<Map<String, String>> chatHistory) async {
+    final apiKey = dotenv.env['OPENAI_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      return 'Maaf, aku lagi tidak bisa terhubung ke server. Pastikan koneksi internetmu baik.';
+    }
+
+    String userContext = '';
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user != null) {
-        final data = await Supabase.instance.client
+        final profile = await Supabase.instance.client
             .from('profiles')
             .select()
             .eq('id', user.id)
             .maybeSingle();
-        return data;
-      }
-    } catch (e) {
-      debugPrint('Error fetching user profile for AI: $e');
-    }
-    return null;
-  }
 
-  static Future<String> chatWithAI(List<Map<String, String>> chatHistory) async {
-    final apiKey = dotenv.env['OPENAI_API_KEY'];
-    if (apiKey == null || apiKey.isEmpty) {
-      return "Maaf, aku lagi nggak bisa terhubung ke server nih. Pastikan API Key sudah diset ya! 🌸";
-    }
-
-    final today = TimeHelper.nowWIB();
-    final todayStr = "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
-
-    final List<String> months = [
-      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-    ];
-    final List<String> weekdays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-    final weekdayStr = weekdays[today.weekday - 1];
-    final monthStr = months[today.month - 1];
-    final todayReadable = "$weekdayStr, ${today.day} $monthStr ${today.year}";
-
-    String userContext = "";
-    final profile = await _getUserProfile();
-    if (profile != null) {
-      final String name = profile['full_name'] as String? ?? 'Bloom';
-      final bool? hasMenstruated = profile['has_menstruated'] as bool?;
-      final String? lastPeriodDateStr = profile['last_period_date'] as String?;
-      final int avgPeriodDuration = profile['avg_period_duration'] as int? ?? 5;
-      final int avgCycleLength = profile['avg_cycle_length'] as int? ?? 28;
-
-      userContext += "\n\nINFORMASI DATA PENGGUNA SAAT INI:";
-      userContext += "\n- Nama Panggilan: $name";
-      userContext += "\n- Hari ini tanggal: $todayReadable ($todayStr)";
-      
-      if (hasMenstruated == false) {
-        userContext += "\n- Status Haid: Pengguna belum pernah menstruasi.";
-      } else if (hasMenstruated == true) {
-        userContext += "\n- Status Haid: Sudah pernah menstruasi.";
-        userContext += "\n- Durasi Haid Rata-rata: $avgPeriodDuration hari";
-        userContext += "\n- Panjang Siklus Rata-rata: $avgCycleLength hari";
-        
-        if (lastPeriodDateStr != null) {
-          final lastPeriodDate = DateTime.tryParse(lastPeriodDateStr);
-          if (lastPeriodDate != null) {
-            final lastPeriodReadable = "${lastPeriodDate.day} ${months[lastPeriodDate.month - 1]} ${lastPeriodDate.year}";
-            userContext += "\n- Tanggal Haid Terakhir Mulai: $lastPeriodReadable ($lastPeriodDateStr)";
-            
-            final todayWithoutTime = DateTime(today.year, today.month, today.day);
-            final lastPeriodWithoutTime = DateTime(lastPeriodDate.year, lastPeriodDate.month, lastPeriodDate.day);
-            
-            DateTime predictionDate = lastPeriodWithoutTime.add(Duration(days: avgCycleLength));
-            
-            // Fast-forward prediction date to current/next cycle if it's completely in the past
-            while (predictionDate.add(Duration(days: avgPeriodDuration)).isBefore(todayWithoutTime)) {
-              predictionDate = predictionDate.add(Duration(days: avgCycleLength));
-            }
-            
-            final target = DateTime(predictionDate.year, predictionDate.month, predictionDate.day);
-            final difference = target.difference(todayWithoutTime).inDays;
-            
-            final currentPeriodDay = todayWithoutTime.difference(lastPeriodWithoutTime).inDays + 1;
-            final isCurrentlyInPeriod = (currentPeriodDay >= 1 && currentPeriodDay <= avgPeriodDuration);
-            
-            if (isCurrentlyInPeriod) {
-              userContext += "\n- Kondisi Haid Hari Ini: Sedang berlangsung (Hari ke-$currentPeriodDay dari perkiraan $avgPeriodDuration hari).";
-            } else if (difference > 0) {
-              userContext += "\n- Kondisi Haid Hari Ini: H-$difference menjelang haid berikutnya (kurang $difference hari lagi).";
-            } else if (difference == 0) {
-              userContext += "\n- Kondisi Haid Hari Ini: Perkiraan haid berikutnya mulai HARI INI.";
-            } else {
-              final lateDays = difference.abs();
-              userContext += "\n- Kondisi Haid Hari Ini: Terlambat haid $lateDays hari dari perkiraan.";
-            }
-            
-            // Next 3 predicted cycles
-            userContext += "\n- Jadwal Prediksi Siklus-Siklus Berikutnya:";
-            DateTime tempPrediction = predictionDate;
-            for (int i = 1; i <= 3; i++) {
-              final tempStartReadable = "${tempPrediction.day} ${months[tempPrediction.month - 1]} ${tempPrediction.year}";
-              final tempEnd = tempPrediction.add(Duration(days: avgPeriodDuration - 1));
-              final tempEndReadable = "${tempEnd.day} ${months[tempEnd.month - 1]} ${tempEnd.year}";
-              userContext += "\n  * Siklus ke-$i: Perkiraan Mulai $tempStartReadable s/d Selesai $tempEndReadable";
-              tempPrediction = tempPrediction.add(Duration(days: avgCycleLength));
-            }
-          }
-        } else {
-          userContext += "\n- Catatan: Pengguna belum mencatat tanggal haid terakhirnya.";
+        if (profile != null) {
+          final name = profile['full_name'] ?? 'Pengguna';
+          userContext += '\n\nINFORMASI PENGGUNA:';
+          userContext += '\n- Nama: $name';
+          userContext += '\n- Usia: ${profile['age'] ?? 'tidak diketahui'} tahun';
+          userContext += '\n- Sekolah: ${profile['school'] ?? 'tidak diketahui'}';
         }
-      } else {
-        userContext += "\n- Status: Data menstruasi belum disetup oleh pengguna.";
-      }
-    } else {
-      userContext += "\n- Hari ini tanggal: $todayReadable ($todayStr)";
-      userContext += "\n- Catatan: Data profil pengguna tidak ditemukan di database.";
-    }
 
-    final String systemPrompt = "Kamu adalah 'BloomFem Assistant', sahabat dan konsultan kesehatan reproduksi remaja perempuan. Jawab dengan bahasa gaul, ramah, dan empatik. "
-        "ATURAN MUTLAK: Kamu HANYA boleh menjawab pertanyaan seputar menstruasi, pubertas, kebersihan intim, dan kesehatan mental remaja. Jika ditanya tentang pemrograman (koding/SQL/Python), hitungan matematika kompleks, atau hal di luar kesehatan reproduksi, TOLAK dengan sopan dan katakan kamu hanya bisa membahas kesehatan perempuan. Jangan beri resep obat keras. "
-        "Jika pengguna curhat atau berkonsultasi mengenai durasi haid yang sangat singkat (misalnya 1 atau 2 hari saja / kurang dari 3 hari), berikan penjelasan medis ringan secara sangat jelas, menenangkan, empati, dan edukatif tentang faktor penyebabnya pada remaja (seperti stres, kelelahan, perubahan berat badan, diet, atau hormonal imbalance yang wajar terjadi di awal pubertas). Berikan saran agar mereka memantau terus siklus haidnya dan berkonsultasi ke dokter jika terjadi berulang kali. "
-        "PENTING: Gunakan informasi data pribadi pengguna di bawah ini untuk menjawab secara spesifik dan personal ketika ditanya mengenai status, tanggal haid terakhir, perkiraan haid berikutnya, atau kapan haid bulan depan. Jangan menyuruh pengguna menggunakan aplikasi lain atau membuka menu lain untuk melihat data ini. Kamu harus menganalisis data ini dan memberikan jawaban langsung kepada pengguna. "
-        "$userContext";
+        // Get latest risk result
+        final risk = await Supabase.instance.client
+            .from('risk_results')
+            .select()
+            .eq('user_id', user.id)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+
+        if (risk != null) {
+          userContext += '\n- Risiko ISK terakhir: ${risk['risk_level']} (skor ${risk['total_score']})';
+        }
+
+        // Get today's habits
+        final today = DateTime.now().toIso8601String().substring(0, 10);
+        final habits = await Supabase.instance.client
+            .from('daily_habits')
+            .select()
+            .eq('user_id', user.id)
+            .eq('log_date', today)
+            .maybeSingle();
+
+        if (habits != null) {
+          userContext += '\n- Minum air hari ini: ${habits['water_intake']} gelas';
+          userContext += '\n- Aktivitas fisik: ${habits['physical_activity']} menit';
+        }
+      }
+    } catch (_) {}
+
+    final systemPrompt = 'Kamu adalah "Suster Care", asisten kesehatan ISK (Infeksi Saluran Kemih) '
+        'untuk remaja putri dalam aplikasi UtiCare. '
+        'Jawab dengan bahasa yang ramah, empati, dan mudah dipahami remaja. '
+        'ATURAN: Kamu HANYA boleh menjawab pertanyaan seputar ISK, kesehatan saluran kemih, '
+        'kebersihan area genital, kebiasaan minum air, dan topik kesehatan terkait. '
+        'Jika ditanya di luar topik kesehatan (pemrograman, matematika, dll), tolak dengan sopan. '
+        'Jangan berikan diagnosis medis berat. Sarankan ke tenaga kesehatan jika gejala serius. '
+        'Maksimal 3-4 kalimat per jawaban kecuali pengguna minta penjelasan detail.'
+        '$userContext';
 
     final List<Map<String, dynamic>> messages = [
       {'role': 'system', 'content': systemPrompt},
@@ -208,14 +206,14 @@ class AIService {
           return content.trim();
         }
       } else {
-        debugPrint('OpenAI Chat API Error: ${response.statusCode} - ${response.body}');
-        return "Aduh, sepertinya ada sedikit kendala koneksi nih. Coba lagi nanti ya! 🌸";
+        debugPrint('OpenAI Chat API Error: ${response.statusCode}');
+        return 'Ada sedikit kendala koneksi. Coba lagi nanti ya.';
       }
     } catch (e) {
-      debugPrint('Failed to fetch AI chat: $e');
-      return "Waduh, aku kesulitan memproses pesanmu karena masalah jaringan. Coba lagi ya! 🌸";
+      debugPrint('Chat AI error: $e');
+      return 'Kesulitan memproses pesanmu karena masalah jaringan. Coba lagi.';
     }
 
-    return "Maaf ya, aku belum bisa menjawab pertanyaanmu saat ini. 🌸";
+    return 'Maaf, aku belum bisa menjawab pertanyaanmu saat ini.';
   }
 }

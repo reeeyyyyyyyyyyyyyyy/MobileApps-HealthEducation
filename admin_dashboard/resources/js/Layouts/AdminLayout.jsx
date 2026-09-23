@@ -1,29 +1,26 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { gooeyToast, GooeyToaster } from 'goey-toast';
 import {
-  LayoutDashboard, BookOpen, HelpCircle, AlertTriangle, Users,
-  LogOut, Menu, X, Sparkles, Route, Moon, Sun
+  LayoutDashboard,
+  Users,
+  BookOpen,
+  ShieldAlert,
+  BellRing,
+  ClipboardCheck,
+  Sparkles,
+  LogOut,
+  Menu,
+  X,
+  HeartHandshake,
+  Download,
 } from 'lucide-react';
 import 'goey-toast/styles.css';
 
 export default function AdminLayout({ children, title }) {
   const { props, url } = usePage();
   const { auth, flash } = props;
-  const [mobileOpen, setMobileOpen] = React.useState(false);
-  const [dark, setDark] = React.useState(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('bloomfem-dark');
-      if (stored !== null) return stored === 'true';
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    localStorage.setItem('bloomfem-dark', dark.toString());
-  }, [dark]);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     if (flash?.success) gooeyToast.success(flash.success, { preset: 'bouncy', duration: 4000 });
@@ -32,15 +29,18 @@ export default function AdminLayout({ children, title }) {
 
   const nav = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, current: url === '/admin' },
-    { name: 'Modul Edukasi', href: '/admin/modules', icon: BookOpen, current: url.startsWith('/admin/modules') },
-    { name: 'Kuis Evaluasi', href: '/admin/quizzes', icon: HelpCircle, current: url.startsWith('/admin/quizzes') },
-    { name: 'Tips Harian', href: '/admin/tips', icon: Sparkles, current: url.startsWith('/admin/tips') },
-    { name: 'Laporan Moderasi', href: '/admin/reports', icon: AlertTriangle, current: url.startsWith('/admin/reports') },
-    { name: 'Progres Pengguna', href: '/admin/users', icon: Users, current: url.startsWith('/admin/users') },
-    { name: 'Learning Path', href: '/admin/paths', icon: Route, current: url.startsWith('/admin/paths') },
+    { name: 'Responden Penelitian', href: '/admin/respondents', icon: Users, current: url.startsWith('/admin/respondents') },
+    { name: 'Materi Edukasi ISK', href: '/admin/education', icon: BookOpen, current: url.startsWith('/admin/education') },
+    { name: 'Skrining Check Risk', href: '/admin/check-risk', icon: ShieldAlert, current: url.startsWith('/admin/check-risk') },
+    { name: 'Template Pengingat', href: '/admin/reminders', icon: BellRing, current: url.startsWith('/admin/reminders') },
+    { name: 'Kuesioner Pre/Post Test', href: '/admin/survey', icon: ClipboardCheck, current: url.startsWith('/admin/survey') },
+    { name: 'Tips Harian ISK', href: '/admin/tips', icon: Sparkles, current: url.startsWith('/admin/tips') },
   ];
 
-  const handleLogout = (e) => { e.preventDefault(); router.post('/admin/logout'); };
+  const handleLogout = (e) => {
+    e.preventDefault();
+    router.post('/admin/logout');
+  };
 
   const NavLink = ({ item, mobile }) => {
     const Icon = item.icon;
@@ -50,101 +50,109 @@ export default function AdminLayout({ children, title }) {
         onClick={() => mobile && setMobileOpen(false)}
         className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
           item.current
-            ? 'bg-teal-50 text-teal-700'
-            : 'text-slate-400 hover:bg-sand-50 hover:text-slate-700'
+            ? 'bg-violet-600 text-white shadow-sm shadow-violet-200'
+            : 'text-slate-600 hover:bg-violet-50 hover:text-violet-700'
         }`}
       >
-        <Icon className={`w-[18px] h-[18px] ${item.current ? 'text-teal-600' : 'text-slate-400'}`} />
-        {item.name}
+        <Icon className={`w-[18px] h-[18px] ${item.current ? 'text-white' : 'text-slate-400'}`} />
+        <span>{item.name}</span>
       </Link>
     );
   };
 
   return (
-    <div className="min-h-screen bg-sand-100 flex">
+    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800">
       <GooeyToaster position="top-right" theme="light" />
 
       {/* Sidebar Desktop */}
-      <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-white border-r border-sand-200/80 p-4 z-20">
-        <div className="flex items-center gap-3 px-3 py-4 border-b border-sand-100 mb-6">
-          <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm shadow-teal-200">
-            B
+      <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-white border-r border-slate-200/80 p-4 z-20">
+        <div className="flex items-center gap-3 px-3 py-4 border-b border-slate-100 mb-6">
+          <div className="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm shadow-violet-300">
+            <HeartHandshake className="w-6 h-6" />
           </div>
           <div>
-            <span className="font-extrabold tracking-tight text-[16px] text-slate-800">BloomFem</span>
-            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">Admin Portal</span>
+            <span className="font-extrabold tracking-tight text-lg text-slate-800">UtiCare</span>
+            <span className="block text-[10px] font-bold text-violet-600 uppercase tracking-widest leading-none mt-0.5">
+              Admin & Penelitian
+            </span>
           </div>
         </div>
-        <nav className="flex-1 space-y-1">
-          {nav.map((item) => <NavLink key={item.name} item={item} />)}
+
+        <nav className="flex-1 space-y-1 overflow-y-auto">
+          {nav.map((item) => (
+            <NavLink key={item.name} item={item} />
+          ))}
         </nav>
-        <div className="pt-4 border-t border-sand-100 space-y-3">
+
+        <div className="pt-4 border-t border-slate-100 space-y-3">
           <div className="flex items-center gap-3 px-2">
-            <div className="w-9 h-9 rounded-full bg-teal-50 flex items-center justify-center text-teal-700 font-bold text-sm">
-              {auth?.user?.name ? auth.user.name.charAt(0) : 'A'}
+            <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center text-violet-700 font-bold text-sm">
+              {auth?.user?.name ? auth.user.name.charAt(0).toUpperCase() : 'A'}
             </div>
             <div className="overflow-hidden">
-              <span className="block text-sm font-bold text-slate-700 truncate leading-tight">{auth?.user?.name || 'Admin'}</span>
+              <span className="block text-sm font-bold text-slate-700 truncate leading-tight">
+                {auth?.user?.name || 'Admin'}
+              </span>
               <span className="block text-xs text-slate-400 truncate mt-0.5">{auth?.user?.email}</span>
             </div>
           </div>
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-brick-600 hover:bg-brick-50 transition-all duration-200">
-            <LogOut className="w-[18px] h-[18px] text-brick-500" />
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-all duration-200"
+          >
+            <LogOut className="w-[18px] h-[18px] text-rose-500" />
             Keluar
           </button>
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 md:pl-64 flex flex-col">
-        <header className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-sand-200/60 px-4 md:px-8 py-4 flex items-center justify-between z-10">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setMobileOpen(!mobileOpen)} className="md:hidden p-1.5 text-slate-500 hover:bg-sand-50 rounded-lg transition-colors">
-              {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+      {/* Main Content Area */}
+      <div className="flex-1 md:pl-64 flex flex-col min-h-screen">
+        {/* Top Header */}
+        <header className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 md:px-8 py-3.5 flex items-center justify-between z-10">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileOpen(!mobileOpen)}
+              className="md:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100"
+            >
+              {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
-            <h1 className="text-base font-bold text-slate-800 dark:text-slate-200">{title}</h1>
+            <h1 className="text-lg font-bold text-slate-800">{title || 'UtiCare Admin Portal'}</h1>
           </div>
+
           <div className="flex items-center gap-2">
-            <button onClick={() => setDark(!dark)} className="p-2 text-slate-400 hover:bg-sand-50 dark:hover:bg-slate-700 rounded-lg transition-all" title={dark ? 'Mode Terang' : 'Mode Gelap'}>
-              {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-            <div className="text-xs font-semibold text-slate-400 bg-sand-50 dark:bg-slate-700 px-3 py-1.5 rounded-lg">
-              {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </div>
+            <a
+              href="/admin/respondents/export"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export Data CSV
+            </a>
           </div>
         </header>
 
+        {/* Mobile Navigation Drawer */}
         {mobileOpen && (
-          <div className="md:hidden fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-30" onClick={() => setMobileOpen(false)}>
-            <aside className="w-64 bg-white h-full p-4 flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center gap-2 pb-4 border-b border-sand-100 mb-6">
-                <div className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center text-white font-extrabold text-sm">B</div>
-                <span className="font-extrabold text-slate-800 text-sm">BloomFem</span>
-              </div>
-              <nav className="flex-1 space-y-1">
-                {nav.map((item) => <NavLink key={item.name} item={item} mobile />)}
-              </nav>
-              <div className="pt-4 border-t border-sand-100 flex flex-col gap-3">
-                <div className="flex items-center gap-3 px-2">
-                  <div className="w-8 h-8 rounded-full bg-teal-50 flex items-center justify-center text-teal-700 font-bold text-xs">
-                    {auth?.user?.name ? auth.user.name.charAt(0) : 'A'}
-                  </div>
-                  <div className="overflow-hidden">
-                    <span className="block text-xs font-bold text-slate-700 truncate">{auth?.user?.name}</span>
-                    <span className="block text-[10px] text-slate-400 truncate">{auth?.user?.email}</span>
-                  </div>
-                </div>
-                <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-brick-600 hover:bg-brick-50">
-                  <LogOut className="w-4 h-4 text-brick-500" /> Keluar
-                </button>
-              </div>
-            </aside>
+          <div className="md:hidden bg-white border-b border-slate-200 p-4 space-y-1 z-20">
+            {nav.map((item) => (
+              <NavLink key={item.name} item={item} mobile />
+            ))}
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-rose-600 hover:bg-rose-50"
+            >
+              <LogOut className="w-[18px] h-[18px]" />
+              Keluar
+            </button>
           </div>
         )}
 
-        <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto">
-          {children}
-        </main>
+        {/* Page Body */}
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto">{children}</main>
+
+        <footer className="px-4 md:px-8 py-4 bg-white border-t border-slate-200 text-center text-xs text-slate-400">
+          UtiCare &copy; {new Date().getFullYear()} &mdash; Aplikasi Mobile Berbasis Health Belief Model terhadap Pencegahan Infeksi Saluran Kemih pada Remaja Putri
+        </footer>
       </div>
     </div>
   );

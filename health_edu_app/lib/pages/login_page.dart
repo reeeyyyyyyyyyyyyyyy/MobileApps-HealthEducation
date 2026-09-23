@@ -2,11 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../theme/uticare_theme.dart';
 import '../main.dart';
 import '../utils/toast_helper.dart';
 import 'complete_google_signup_page.dart';
 import 'register_page.dart';
-import 'setup_tracker_page.dart';
+import 'pretest_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -33,15 +34,15 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final profile = await Supabase.instance.client
           .from('profiles')
-          .select('has_menstruated')
+          .select('has_completed_pretest')
           .eq('id', userId)
           .maybeSingle();
 
       if (mounted) {
-        if (profile == null || profile['has_menstruated'] == null) {
+        if (profile == null || profile['has_completed_pretest'] != true) {
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (context) => const SetupTrackerPage()),
+            MaterialPageRoute(builder: (context) => const PretestPage()),
             (route) => false,
           );
         } else {
@@ -67,16 +68,14 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _handleEmailSignIn() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
     try {
       if (!isSupabaseInitialized) {
-        throw Exception("Supabase is not initialized. Running in Mock Mode.");
+        throw Exception("Supabase belum diinisialisasi.");
       }
 
       final authResponse = await Supabase.instance.client.auth.signInWithPassword(
@@ -107,26 +106,18 @@ class _LoginPageState extends State<LoginPage> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
 
-
-
   Future<void> _handleGoogleSignIn() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       if (!isSupabaseInitialized) {
         throw Exception("Supabase belum diinisialisasi.");
       }
-
-
 
       final GoogleSignIn googleSignIn = GoogleSignIn(
         clientId: Platform.isIOS
@@ -137,9 +128,7 @@ class _LoginPageState extends State<LoginPage> {
 
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
         return;
       }
 
@@ -159,10 +148,9 @@ class _LoginPageState extends State<LoginPage> {
 
       final currentUser = Supabase.instance.client.auth.currentUser;
       if (currentUser != null) {
-        // Ambil profil dari database untuk mengecek kelengkapan
         final profile = await Supabase.instance.client
             .from('profiles')
-            .select('full_name')
+            .select('full_name, school')
             .eq('id', currentUser.id)
             .maybeSingle();
 
@@ -170,7 +158,7 @@ class _LoginPageState extends State<LoginPage> {
 
         if (fullName == null || fullName.trim().isEmpty) {
           if (mounted) {
-            ToastHelper.showSuccess(context, 'Berhasil masuk Google! Silakan lengkapi profil Anda.');
+            ToastHelper.showSuccess(context, 'Berhasil masuk Google! Silakan lengkapi profil.');
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -205,9 +193,7 @@ class _LoginPageState extends State<LoginPage> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -215,12 +201,10 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC), // Slate super terang
+      backgroundColor: UtiCareTheme.background,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1E293B)),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -233,60 +217,26 @@ class _LoginPageState extends State<LoginPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 10),
-                // Header
-                Text(
-                  'Selamat Datang Kembali',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1E293B),
-                  ),
+                const Text(
+                  'Selamat Datang di UtiCare',
+                  style: UtiCareTheme.heading1,
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'Masuk ke akunmu untuk melanjutkan proses belajar dan berdiskusi.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: const Color(0xFF64748B),
-                    height: 1.4,
-                  ),
+                const Text(
+                  'Masuk ke akunmu untuk memantau kesehatan dan belajar pencegahan ISK.',
+                  style: UtiCareTheme.body,
                 ),
                 const SizedBox(height: 36),
 
-                // Form Fields
-                // Email Field
-                Text(
-                  'Email',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF1E293B),
-                  ),
-                ),
+                // Email
+                const Text('Email', style: UtiCareTheme.bodyBold),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(color: Color(0xFF1E293B)),
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText: 'nama@email.com',
-                    hintStyle: const TextStyle(color: Color(0xFF64748B)),
-                    prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF64748B)),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.5),
-                    ),
+                    prefixIcon: Icon(Icons.email_outlined, color: UtiCareTheme.textTertiary),
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -300,72 +250,23 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 20),
 
-                // Password Field
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Kata Sandi',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF1E293B),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Fungsi lupa kata sandi belum tersedia.'),
-                            backgroundColor: Color(0xFF8B5CF6),
-                          ),
-                        );
-                      },
-                      child: Text(
-                        'Lupa Kata Sandi?',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF8B5CF6),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                // Password
+                const Text('Kata Sandi', style: UtiCareTheme.bodyBold),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-                  style: const TextStyle(color: Color(0xFF1E293B)),
                   decoration: InputDecoration(
                     hintText: '••••••••',
-                    hintStyle: const TextStyle(color: Color(0xFF64748B)),
-                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFF64748B)),
+                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: UtiCareTheme.textTertiary),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                        color: const Color(0xFF64748B),
+                        color: UtiCareTheme.textTertiary,
                       ),
                       onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
+                        setState(() => _obscurePassword = !_obscurePassword);
                       },
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.5),
                     ),
                   ),
                   validator: (value) {
@@ -383,48 +284,25 @@ class _LoginPageState extends State<LoginPage> {
                 // Button Masuk
                 ElevatedButton(
                   onPressed: _isLoading ? null : _handleEmailSignIn,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF8B5CF6),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 2,
-                    shadowColor: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
-                  ),
                   child: _isLoading
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
-                      : const Text(
-                          'Masuk',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
+                      : const Text('Masuk'),
                 ),
                 const SizedBox(height: 24),
 
-                // Divider "atau masuk dengan"
+                // Divider
                 Row(
                   children: [
-                    Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.3))),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text(
-                        'atau masuk dengan',
-                        style: TextStyle(fontSize: 12, color: const Color(0xFF64748B)),
-                      ),
+                    Expanded(child: Divider(color: UtiCareTheme.border)),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Text('atau masuk dengan', style: UtiCareTheme.caption),
                     ),
-                    Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.3))),
+                    Expanded(child: Divider(color: UtiCareTheme.border)),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -433,98 +311,25 @@ class _LoginPageState extends State<LoginPage> {
                 OutlinedButton(
                   onPressed: _isLoading ? null : _handleGoogleSignIn,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF1E293B),
-                    side: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    backgroundColor: Colors.white,
+                    backgroundColor: UtiCareTheme.surface,
+                    side: const BorderSide(color: UtiCareTheme.border),
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Elegant Google colored icon drawn with basic components or simple text logo
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                        ),
-                        child: Row(
-                          children: [
-                            Text(
-                              'G',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.blue.shade700,
-                              ),
-                            ),
-                            Text(
-                              'o',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.red.shade600,
-                              ),
-                            ),
-                            Text(
-                              'o',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.orange.shade600,
-                              ),
-                            ),
-                            Text(
-                              'g',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.blue.shade700,
-                              ),
-                            ),
-                            Text(
-                              'l',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.green.shade600,
-                              ),
-                            ),
-                            Text(
-                              'e',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.red.shade600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'Masuk dengan Google',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
+                      Icon(Icons.g_mobiledata_rounded, size: 28, color: UtiCareTheme.primary),
+                      SizedBox(width: 8),
+                      Text('Masuk dengan Google', style: TextStyle(color: UtiCareTheme.textPrimary)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 36),
 
-                // Register Navigation Link
+                // Register Link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      'Belum memiliki akun? ',
-                      style: TextStyle(fontSize: 14, color: const Color(0xFF64748B)),
-                    ),
+                    const Text('Belum memiliki akun? ', style: UtiCareTheme.body),
                     GestureDetector(
                       onTap: () {
                         Navigator.pushReplacement(
@@ -534,11 +339,7 @@ class _LoginPageState extends State<LoginPage> {
                       },
                       child: Text(
                         'Daftar Sekarang',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF8B5CF6),
-                        ),
+                        style: UtiCareTheme.bodyBold.copyWith(color: UtiCareTheme.primary),
                       ),
                     ),
                   ],

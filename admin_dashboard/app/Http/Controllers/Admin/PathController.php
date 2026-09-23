@@ -62,20 +62,42 @@ class PathController extends Controller
             return back()->with('error', 'ID path tidak valid');
         }
 
-        $path = DB::table('learning_paths')->where('id', $id)->first();
-        if (!$path) return back()->with('error', 'Path tidak ditemukan');
-
         $direction = $request->input('direction');
+        if (!$direction) return back();
+
+        $current = DB::table('learning_paths')->where('id', $id)->first();
+        if (!$current) return back()->with('error', 'Path tidak ditemukan');
+
         $swap = $direction === 'up'
-            ? DB::table('learning_paths')->where('sort_order', '<', $path->sort_order)->orderBy('sort_order', 'desc')->first()
-            : DB::table('learning_paths')->where('sort_order', '>', $path->sort_order)->orderBy('sort_order', 'asc')->first();
+            ? DB::table('learning_paths')->where('sort_order', '<', $current->sort_order)->orderBy('sort_order', 'desc')->first()
+            : DB::table('learning_paths')->where('sort_order', '>', $current->sort_order)->orderBy('sort_order', 'asc')->first();
 
         if (!$swap) return back();
 
-        DB::table('learning_paths')->where('id', $path->id)->update(['sort_order' => $swap->sort_order]);
-        DB::table('learning_paths')->where('id', $swap->id)->update(['sort_order' => $path->sort_order]);
+        DB::table('learning_paths')->where('id', $current->id)->update(['sort_order' => $swap->sort_order]);
+        DB::table('learning_paths')->where('id', $swap->id)->update(['sort_order' => $current->sort_order]);
 
         return back()->with('success', 'Urutan path berhasil diubah!');
+    }
+
+    public function reorder(Request $request)
+    {
+        $ids = $request->input('ids', []);
+        if (empty($ids)) return back()->with('error', 'Tidak ada data urutan.');
+
+        \Log::info('Reorder received IDs: ' . json_encode($ids));
+
+        foreach ($ids as $i => $id) {
+            $id = (string) $id;
+            if (!str_contains($id, '-')) {
+                \Log::warning('Skip non-UUID ID: ' . $id);
+                continue;
+            }
+            DB::table('learning_paths')->where('id', $id)->update(['sort_order' => $i + 1]);
+        }
+
+        \Log::info('Reorder done');
+        return back()->with('success', 'Urutan path berhasil disimpan!');
     }
 
     public function destroy($id)
